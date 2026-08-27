@@ -1,0 +1,18 @@
+{
+  "run_id": "2026-01-02_example",
+  "target": "000000.SZ",
+  "status": "blocked",
+  "blocked_reason": "dataset.blocks.social.status = missing，且 news 块为 degraded，样本不足以给出情绪判断",
+  "window": {"start": "2025-12-03", "end": "2026-01-02"},
+  "sentiment_score": null,
+  "direction": "unknown",
+  "attention_score": null,
+  "events": [],
+  "divergences": [],
+  "confidence": "low",
+  "caveats": [
+    "本路分析被阻塞：社交舆情数据源未配置",
+    "按仓库纪律，数据缺失时输出 blocked 而不是凭常识编造情绪结论",
+    "下游 report-writer 必须在报告中显式声明本路缺失"
+  ]
+}

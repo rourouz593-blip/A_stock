@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "report.schema.json",
+  "title": "最终报告（结构化）",
+  "description": "report-writer 产出。内容只能来自三份分析产物，不得引入新信息",
+  "type": "object",
+  "required": ["run_id", "target", "as_of", "data_completeness", "summary", "verdicts", "divergences", "risks", "provenance", "disclaimer"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "target": {"type": "string"},
+    "as_of": {"type": "string"},
+    "data_completeness": {
+      "type": "object",
+      "required": ["level", "missing"],
+      "properties": {
+        "level": {"enum": ["complete", "partial", "insufficient"]},
+        "missing": {"type": "array", "items": {"type": "string"}, "description": "缺失或 blocked 的分析路径"}
+      }
+    },
+    "summary": {"type": "string", "description": "3-5 句；有缺口必须在第一句声明"},
+    "verdicts": {
+      "type": "object",
+      "description": "三路结论对照。TODO(strategy): 是否加权成总分未定，当前只做对照",
+      "properties": {
+        "fundamental": {"$ref": "#/$defs/verdictCell"},
+        "technical": {"$ref": "#/$defs/verdictCell"},
+        "sentiment": {"$ref": "#/$defs/verdictCell"}
+      }
+    },
+    "divergences": {
+      "type": "array",
+      "description": "报告最核心的一节：三路之间的矛盾与印证",
+      "items": {
+        "type": "object",
+        "required": ["kind", "description", "sources"],
+        "properties": {
+          "kind": {"enum": ["agreement", "conflict"]},
+          "description": {"type": "string"},
+          "possible_explanation": {"type": ["string", "null"]},
+          "sources": {"type": "array", "items": {"enum": ["fundamental", "technical", "sentiment"]}}
+        }
+      }
+    },
+    "risks": {"type": "array", "items": {"type": "string"}},
+    "provenance": {
+      "type": "object",
+      "description": "从 dataset.json 透传，保证报告可追溯",
+      "properties": {
+        "adjust_mode": {"type": "string"},
+        "sources": {"type": "array", "items": {"type": "string"}},
+        "quality_flags": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "disclaimer": {"type": "string"}
+  },
+  "$defs": {
+    "verdictCell": {
+      "type": "object",
+      "required": ["status", "verdict", "confidence"],
+      "properties": {
+        "status": {"$ref": "_common.defs.json#/$defs/status"},
+        "verdict": {"type": "string"},
+        "confidence": {"$ref": "_common.defs.json#/$defs/confidence"},
+        "one_liner": {"type": "string"}
+      }
+    }
+  }
+}

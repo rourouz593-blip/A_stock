@@ -1,0 +1,33 @@
+{
+  "run_id": "2026-01-02_example",
+  "target": "000000.SZ",
+  "as_of": "2026-01-02",
+  "data_completeness": {"level": "partial", "missing": ["sentiment"]},
+  "summary": "【数据缺口声明】本次分析的情绪面因数据源未配置而缺失，以下结论仅覆盖基本面与技术面。本报告为教学示例，标的为虚构公司，全部数值为占位假数据。基本面与技术面均因方法论未定义而只给出结构化占位结论。本报告不构成任何投资建议。",
+  "verdicts": {
+    "fundamental": {"status": "ok", "verdict": "neutral", "confidence": "low", "one_liner": "占位：方法论未定义，无法给出实质判断"},
+    "technical": {"status": "ok", "verdict": "range", "confidence": "low", "one_liner": "占位：指标白名单未定义，无法给出实质判断"},
+    "sentiment": {"status": "blocked", "verdict": "unknown", "confidence": "low", "one_liner": "数据缺失，本路未产出结论"}
+  },
+  "divergences": [
+    {
+      "kind": "agreement",
+      "description": "占位：基本面与技术面均为低置信度中性，谈不上印证，只能说明两路都缺乏有效输入",
+      "possible_explanation": "两路的方法论尚未实现，不是市场本身没有信号",
+      "sources": ["fundamental", "technical"]
+    }
+  ],
+  "risks": [
+    "情绪面缺失，事件驱动风险完全未被覆盖",
+    "news 数据块为降级源，覆盖度不完整"
+  ],
+  "provenance": {
+    "adjust_mode": "qfq",
+    "sources": ["EXAMPLE_SOURCE_A", "EXAMPLE_SOURCE_B", "EXAMPLE_SOURCE_D"],
+    "quality_flags": [
+      {"block": "news", "level": "warning", "message": "主源不可用，已降级到备用源"},
+      {"block": "social", "level": "error", "message": "社交舆情数据源未配置"}
+    ]
+  },
+  "disclaimer": "本报告由自动化分析系统生成，所有内容基于公开数据的程序化处理，不构成任何投资建议、要约或承诺。数据可能存在缺失、延迟或错误，分析方法存在局限性。据此操作，风险自负。"
+}

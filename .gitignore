@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 环境与凭证
+.env
+.env.local
+
+# 运行时产物：示例 run 保留，真实 run 不入库
+workspace/runs/*
+!workspace/runs/2026-01-02_example/
+workspace/cache/
+
+# 数据落盘
+data/
+*.parquet
+*.duckdb
+*.sqlite3
+
+# 记忆层的运行流水（按需决定是否入库）
+memory/runs/*.json
+
+# 编辑器
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,38 @@
+{
+  "run_id": "2026-01-02_example",
+  "target": "000000.SZ",
+  "status": "ok",
+  "blocked_reason": null,
+  "verdict": "neutral",
+  "dimensions": [
+    {
+      "name": "profit_quality",
+      "reading": "占位结论：经营性现金流与净利润的比值处于示例区间，需在 skills 中定义阈值后才能判定好坏",
+      "score": null,
+      "confidence": "low",
+      "evidence": [
+        {"block": "financials", "field": "ocf_to_net_profit", "value": 0.0, "period": "2025Q3", "comment": "占位假数据"}
+      ]
+    },
+    {
+      "name": "valuation",
+      "reading": "占位结论：估值分位数计算规则未定义（TODO(strategy)），暂不给出贵贱判断",
+      "score": null,
+      "confidence": "low",
+      "evidence": [
+        {"block": "valuation", "field": "pe_ttm", "value": 0.0, "period": "2026-01-02", "comment": "占位假数据"}
+      ]
+    }
+  ],
+  "key_risks": [
+    {"type": "placeholder", "description": "示例风险项：A 股特有检查项（解禁/质押/减持/ST）尚未实现", "severity": "medium"}
+  ],
+  "evidence": [
+    {"block": "financials", "field": "revenue_yoy", "value": 0.0, "period": "2025Q3", "comment": "占位假数据"}
+  ],
+  "confidence": "low",
+  "caveats": [
+    "本文件为教学示例，全部数值为占位假数据，不代表任何真实公司",
+    "打分体系与指标阈值未确定（TODO(strategy)），所有 score 均为 null"
+  ]
+}

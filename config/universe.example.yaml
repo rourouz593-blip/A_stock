@@ -1,0 +1,17 @@
+# 股票池定义。复制为 universe.yaml 后使用（universe.yaml 不入库）
+version: 1
+
+# 代码 → 名称的映射，orchestrator 用它把公司名反查成代码
+aliases:
+  "000000.SZ": "示例科技"        # 虚构标的，仅用于示例 run
+
+# 分组，方便批量分析
+groups:
+  demo:
+    description: 教学示例用
+    codes: ["000000.SZ"]
+
+  # TODO(strategy): 真实股票池待确定。可能的组织方式：
+  # watchlist:  自选池
+  # by_industry: 按申万一级行业分组
+  # by_index:    沪深300 / 中证500 成分

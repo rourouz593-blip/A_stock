@@ -1,0 +1,28 @@
+# 流水线配置
+version: 1
+
+run:
+  workspace_dir: workspace/runs
+  default_lookback_days: 250
+  # 三个分析 agent 是否并行。串行更好调试，并行更快
+  parallel_analysis: true
+
+steps:
+  data-engineer:        {enabled: true,  required: true,  retry: 2, timeout_seconds: 600}
+  fundamental-analyst:  {enabled: true,  required: false, retry: 1, timeout_seconds: 600}
+  technical-analyst:    {enabled: true,  required: false, retry: 1, timeout_seconds: 300}
+  sentiment-analyst:    {enabled: true,  required: false, retry: 1, timeout_seconds: 600}
+  report-writer:        {enabled: true,  required: true,  retry: 1, timeout_seconds: 300}
+  # required: true 的步骤失败 → 整个 run 标 failed
+  # required: false 的步骤失败 → 标 blocked，流程继续，报告中必须声明缺口
+
+validation:
+  # 每步产出后强制用 schemas/ 校验，不通过则按 retry 重试
+  validate_after_each_step: true
+  fail_run_on_schema_error: true
+
+policy:
+  # 硬约束：这些开关不允许为了"跑通"而关掉
+  forbid_fabricated_data: true      # 数据缺失时必须 blocked，不得编造
+  require_evidence_for_claims: true # 每条结论必须有 evidence
+  forbid_trade_advice: true         # 禁止输出买卖建议、目标价、仓位

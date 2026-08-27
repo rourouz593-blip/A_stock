@@ -1,0 +1,76 @@
+# 工具注册表 —— agent 只允许调用登记在此的工具
+version: 1
+
+tools:
+  - name: init_run
+    entry: tools/init_run.py
+    status: implemented
+    description: 创建一次分析运行的 workspace 目录并写入初始 run_manifest.json
+    allowed_agents: [orchestrator]
+    input:
+      targets: "list[str]  股票代码，形如 600519.SH"
+      as_of: "str  分析基准日 YYYY-MM-DD"
+      slug: "str  run 目录后缀，可选"
+    output:
+      run_id: str
+      run_dir: str
+
+  - name: validate_artifact
+    entry: tools/validate_artifact.py
+    status: implemented
+    description: 用 schemas/ 下的 JSON Schema 校验某个 run 产物是否合规
+    allowed_agents: [orchestrator, data-engineer, fundamental-analyst, technical-analyst, sentiment-analyst, report-writer]
+    input:
+      run_id: str
+      artifact: "str  run_manifest | dataset | fundamental | technical | sentiment | report"
+    output:
+      valid: bool
+      errors: "list[str]"
+
+  - name: fetch_market_data
+    entry: tools/fetch_market_data.py
+    status: stub          # TODO(datasource)
+    description: 拉取日线/分钟线行情
+    allowed_agents: [data-engineer]
+    input: {codes: "list[str]", start: str, end: str, freq: str, adjust: str}
+    output: {path: str, rows: int, provenance: dict}
+
+  - name: fetch_financials
+    entry: tools/fetch_financials.py
+    status: stub          # TODO(datasource)
+    description: 拉取三大报表与估值指标
+    allowed_agents: [data-engineer]
+    input: {codes: "list[str]", periods: "list[str]", statements: "list[str]"}
+    output: {path: str, rows: int, provenance: dict}
+
+  - name: fetch_news
+    entry: tools/fetch_news.py
+    status: stub          # TODO(datasource)
+    description: 拉取公告、新闻与舆情
+    allowed_agents: [data-engineer]
+    input: {codes: "list[str]", start: str, end: str, sources: "list[str]"}
+    output: {path: str, rows: int, provenance: dict}
+
+  - name: clean_dataset
+    entry: tools/clean_dataset.py
+    status: stub          # TODO(datasource)
+    description: 交易日历对齐、复权口径统一、单位归一、质量标记
+    allowed_agents: [data-engineer]
+    input: {run_id: str}
+    output: {path: str, quality_flags: "list[dict]"}
+
+  - name: compute_indicators
+    entry: tools/compute_indicators.py
+    status: stub          # TODO(strategy)
+    description: 按白名单计算技术指标
+    allowed_agents: [technical-analyst]
+    input: {run_id: str, indicators: "list[str]"}
+    output: {indicators: "list[dict]"}
+
+  - name: score_sentiment
+    entry: tools/score_sentiment.py
+    status: stub          # TODO(strategy)
+    description: 按信源权重与时间衰减计算情绪分与热度分
+    allowed_agents: [sentiment-analyst]
+    input: {run_id: str}
+    output: {sentiment_score: float, attention_score: float, events: "list[dict]"}

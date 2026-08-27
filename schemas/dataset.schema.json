@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dataset.schema.json",
+  "title": "数据集",
+  "description": "data-engineer 产出，本次 run 唯一的事实来源",
+  "type": "object",
+  "required": ["run_id", "as_of", "targets", "adjust_mode", "blocks", "quality_flags"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "as_of": {"type": "string"},
+    "targets": {"type": "array", "items": {"type": "string"}},
+    "adjust_mode": {
+      "enum": ["qfq", "hfq", "none"],
+      "description": "复权口径：前复权/后复权/不复权。技术分析必读此字段"
+    },
+    "calendar": {"type": "string", "description": "使用的交易日历版本"},
+    "blocks": {
+      "type": "object",
+      "description": "按数据类别分块，键为类别名",
+      "propertyNames": {
+        "enum": ["ohlcv", "financials", "valuation", "industry", "announcements", "news", "moneyflow", "social"]
+      },
+      "additionalProperties": {"$ref": "#/$defs/block"}
+    },
+    "quality_flags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["block", "level", "message"],
+        "properties": {
+          "block": {"type": "string"},
+          "level": {"enum": ["info", "warning", "error"]},
+          "message": {"type": "string"},
+          "affected_range": {"type": ["string", "null"]}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "block": {
+      "type": "object",
+      "required": ["status", "provenance"],
+      "properties": {
+        "status": {"enum": ["ok", "degraded", "missing"]},
+        "rows": {"type": ["integer", "null"]},
+        "coverage": {
+          "type": ["object", "null"],
+          "properties": {"start": {"type": "string"}, "end": {"type": "string"}}
+        },
+        "path": {"type": ["string", "null"], "description": "大体量数据的落盘路径"},
+        "inline": {"description": "小体量数据可直接内联"},
+        "provenance": {
+          "type": "object",
+          "required": ["source", "fetched_at"],
+          "properties": {
+            "source": {"type": "string", "description": "实际使用的数据源"},
+            "fallback_from": {"type": ["string", "null"], "description": "若降级换源，记录原源"},
+            "fetched_at": {"type": "string"},
+            "field_mapping": {"type": "object", "description": "原始字段 → 本项目字段"},
+            "unit": {"type": ["string", "null"], "description": "金额单位，如 CNY_yuan"}
+          }
+        }
+      }
+    }
+  }
+}

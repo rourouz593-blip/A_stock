@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "_common.defs.json",
+  "title": "分析产物公共定义",
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "description": "一条可追溯的证据：必须指向 dataset.json 里的具体字段与数值",
+      "required": ["block", "field", "value"],
+      "properties": {
+        "block": {"type": "string", "description": "dataset.blocks 中的类别名"},
+        "field": {"type": "string"},
+        "value": {},
+        "period": {"type": ["string", "null"], "description": "报告期或日期"},
+        "comment": {"type": ["string", "null"]}
+      }
+    },
+    "confidence": {"enum": ["high", "medium", "low"]},
+    "status": {"enum": ["ok", "partial", "blocked"]},
+    "caveats": {
+      "type": "array",
+      "description": "本次分析的已知局限，必须如实填写",
+      "items": {"type": "string"}
+    }
+  }
+}

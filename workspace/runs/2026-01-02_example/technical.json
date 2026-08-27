@@ -1,0 +1,31 @@
+{
+  "run_id": "2026-01-02_example",
+  "target": "000000.SZ",
+  "status": "ok",
+  "blocked_reason": null,
+  "adjust_mode": "qfq",
+  "sample": {"bars": 243, "start": "2025-01-02", "end": "2026-01-02", "suspended_days": 3, "limit_days": 0},
+  "trend_state": {"direction": "range", "strength": "weak", "timeframe": "daily"},
+  "indicators": [
+    {
+      "name": "PLACEHOLDER_TREND",
+      "params": {"window": 0},
+      "value": 0.0,
+      "reading": "占位：指标白名单未确定（TODO(strategy)），此处仅演示输出结构",
+      "caveat": "非真实指标"
+    }
+  ],
+  "key_levels": [
+    {"type": "support", "price": 0.0, "basis": "占位：关键位判定规则待定义，必须是可复现规则", "strength": "weak"},
+    {"type": "resistance", "price": 0.0, "basis": "占位：同上", "strength": "weak"}
+  ],
+  "volatility": {"level": "normal", "state": "stable"},
+  "signals": [
+    {"name": "PLACEHOLDER_SIGNAL", "direction": "neutral", "note": "占位信号，用于演示 report-writer 的读取"}
+  ],
+  "confidence": "low",
+  "caveats": [
+    "本文件为教学示例，全部数值为占位假数据",
+    "区间内含 3 个停牌日，长周期指标的连续性已受影响"
+  ]
+}
