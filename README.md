@@ -216,6 +216,8 @@ Agent 之间传消息的"信箱"。一次分析 = 一个 run 目录。
 A-stock/
 ├── AGENTS.md                    ★ 任何 coding agent 进来读的第一份文件
 ├── README.md                    ★ 你正在读的这份（面向人）
+├── CLAUDE.md                      Claude Code 入口指针 → 指向 AGENTS.md
+├── .claude/README.md              harness 适配说明（如何软链成原生 subagent）
 │
 ├── agents/                      ① 角色定义
 │   ├── orchestrator.md

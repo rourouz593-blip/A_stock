@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 
-from _common import SCHEMAS, emit, fail, read_json, run_dir
+from _common import SCHEMAS, build_validator, emit, fail, read_json, run_dir
 
 ARTIFACTS = {
     "run_manifest": "run_manifest.schema.json",
@@ -27,7 +27,7 @@ def main() -> None:
     args = p.parse_args()
 
     try:
-        import jsonschema
+        import jsonschema  # noqa: F401
     except ImportError:
         fail("MISSING_DEP", "缺少依赖 jsonschema，请先 pip install -r requirements.txt")
         return
@@ -35,7 +35,7 @@ def main() -> None:
     doc = read_json(run_dir(args.run_id) / f"{args.artifact}.json")
     schema = read_json(SCHEMAS / ARTIFACTS[args.artifact])
 
-    validator = jsonschema.Draft202012Validator(schema)
+    validator = build_validator(schema)
     errors = [
         f"{'/'.join(map(str, e.path)) or '<root>'}: {e.message}"
         for e in validator.iter_errors(doc)

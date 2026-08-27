@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -28,23 +29,14 @@ def _load(p: Path) -> dict:
 
 @pytest.mark.parametrize("artifact,schema_file", sorted(ARTIFACTS.items()))
 def test_example_artifact_matches_schema(artifact: str, schema_file: str) -> None:
-    jsonschema = pytest.importorskip("jsonschema")
+    pytest.importorskip("jsonschema")
+    sys.path.insert(0, str(REPO / "tools"))
+    from _common import build_validator  # noqa: PLC0415
 
     doc = _load(EXAMPLE_RUN / f"{artifact}.json")
     schema = _load(REPO / "schemas" / schema_file)
 
-    # $ref 指向同目录的 _common.defs.json，用 registry 解析本地引用
-    resolver_store = {}
-    for f in (REPO / "schemas").glob("*.json"):
-        s = _load(f)
-        resolver_store[f.name] = s
-
-    registry_cls = getattr(jsonschema, "validators", None)
-    validator = jsonschema.Draft202012Validator(
-        schema,
-        resolver=jsonschema.RefResolver(base_uri="", referrer=schema, store=resolver_store),
-    )
-    errors = sorted(validator.iter_errors(doc), key=lambda e: list(e.path))
+    errors = sorted(build_validator(schema).iter_errors(doc), key=lambda e: list(e.path))
     assert not errors, "\n".join(
         f"{'/'.join(map(str, e.path)) or '<root>'}: {e.message}" for e in errors
     )

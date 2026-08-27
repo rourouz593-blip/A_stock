@@ -60,3 +60,24 @@ def stub(tool_name: str, todo: str) -> None:
         todo=todo,
         hint="请先在 scripts/ 下实现对应函数，再移除本 stub 调用",
     )
+
+
+def build_validator(schema: dict):
+    """构造一个能解析 schemas/ 目录内本地 $ref 的校验器。
+
+    schemas/*.schema.json 会 $ref 到 _common.defs.json，
+    需要把同目录下所有 schema 注册进 registry 才能解析。
+    """
+    import jsonschema
+    from referencing import Registry, Resource
+
+    resources = []
+    for f in sorted(SCHEMAS.glob("*.json")):
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        resources.append((f.name, Resource.from_contents(doc)))
+        if doc.get("$id") and doc["$id"] != f.name:
+            resources.append((doc["$id"], Resource.from_contents(doc)))
+    registry = Registry().with_contents(
+        [(uri, res.contents) for uri, res in resources]
+    )
+    return jsonschema.Draft202012Validator(schema, registry=registry)

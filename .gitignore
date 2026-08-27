@@ -23,6 +23,10 @@ data/
 # 记忆层的运行流水（按需决定是否入库）
 memory/runs/*.json
 
+# 测试缓存
+.pytest_cache/
+.coverage
+
 # 编辑器
 .DS_Store
 .idea/

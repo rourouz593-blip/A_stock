@@ -33,18 +33,19 @@ def test_provenance_requires_source_and_time() -> None:
 
 
 @pytest.mark.parametrize(
-    "module,func",
+    "module,func,args",
     [
-        ("scripts.fetch.market_data", "fetch_ohlcv"),
-        ("scripts.fetch.financials", "fetch_statements"),
-        ("scripts.fetch.news", "fetch_news"),
-        ("scripts.clean.normalize", "align_to_calendar"),
-        ("scripts.store.repository", "build_dataset_json"),
+        ("scripts.fetch.market_data", "fetch_ohlcv", (FetchRequest(codes=["000000.SZ"]),)),
+        ("scripts.fetch.financials", "fetch_statements", (FetchRequest(codes=["000000.SZ"]),)),
+        ("scripts.fetch.news", "fetch_news", (FetchRequest(codes=["000000.SZ"]),)),
+        ("scripts.clean.normalize", "align_to_calendar", (None, None)),
+        ("scripts.store.repository", "build_dataset_json", ("run", "2026-01-02", {})),
     ],
 )
-def test_stubs_raise_not_implemented(module: str, func: str) -> None:
+def test_stubs_raise_not_implemented(module: str, func: str, args: tuple) -> None:
+    """空实现必须抛 NotImplementedError，而不是静默返回空结果。"""
     import importlib
 
     m = importlib.import_module(module)
     with pytest.raises(NotImplementedError):
-        getattr(m, func)(FetchRequest(codes=["000000.SZ"]))
+        getattr(m, func)(*args)
