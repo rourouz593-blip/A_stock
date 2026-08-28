@@ -7,8 +7,8 @@
 用法:
     python scripts/run_pipeline.py --run-id 2026-01-02_demo --codes 600519.SH
 
-TODO(datasource): 各步骤依赖的 fetch/clean/store 尚未实现，当前运行会抛 NotImplementedError。
-这是预期行为——它证明流水线骨架是接通的，只是内容还空着。
+当前只有 OHLCV 的 script/tool 已接通；交易日历、清洗、组装以及其他数据类别仍是
+TODO。本命令只展示调试流水线状态，不发起网络请求。
 """
 from __future__ import annotations
 
@@ -32,21 +32,23 @@ def main() -> None:
     req = FetchRequest(codes=args.codes, start=args.start, end=args.end)
 
     steps = [
-        ("交易日历", "scripts.fetch.market_data:fetch_trading_calendar"),
-        ("行情",     "scripts.fetch.market_data:fetch_ohlcv"),
-        ("财报",     "scripts.fetch.financials:fetch_statements"),
-        ("估值",     "scripts.fetch.financials:fetch_valuation"),
-        ("公告",     "scripts.fetch.news:fetch_announcements"),
-        ("新闻",     "scripts.fetch.news:fetch_news"),
-        ("资金流",   "scripts.fetch.news:fetch_moneyflow"),
-        ("清洗",     "scripts.clean.normalize:align_to_calendar"),
-        ("组装",     "scripts.store.repository:build_dataset_json"),
+        ("交易日历", "scripts.fetch.market_data:fetch_trading_calendar", False),
+        ("行情",     "scripts.fetch.market_data:fetch_ohlcv", True),
+        ("财报",     "scripts.fetch.financials:fetch_statements", False),
+        ("估值",     "scripts.fetch.financials:fetch_valuation", False),
+        ("公告",     "scripts.fetch.news:fetch_announcements", False),
+        ("新闻",     "scripts.fetch.news:fetch_news", False),
+        ("资金流",   "scripts.fetch.news:fetch_moneyflow", False),
+        ("清洗",     "scripts.clean.normalize:align_to_calendar", False),
+        ("组装",     "scripts.store.repository:build_dataset_json", False),
     ]
 
     print(f"[pipeline] run_id={args.run_id} codes={req.codes}")
-    for label, ref in steps:
-        print(f"  ⬜ {label:<8} → {ref}   (TODO(datasource): 未实现)")
-    print("\n流水线骨架已接通，实现 scripts/ 下的空函数后即可跑通。")
+    for label, ref, implemented in steps:
+        marker = "[OK]" if implemented else "[ ]"
+        note = "已实现；由 fetch_market_data tool 调用" if implemented else "TODO"
+        print(f"  {marker} {label:<8} → {ref}   ({note})")
+    print("\nOHLCV 最小工具链已接通；完整 dataset 流水线仍等待其余步骤。")
 
 
 if __name__ == "__main__":

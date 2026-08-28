@@ -40,6 +40,8 @@ tools: [fetch_market_data, fetch_financials, fetch_news, clean_dataset]
    | 资金流与情绪 | sentiment | 北向资金/龙虎榜/融资融券/舆情热度 |
 2. **调用 `tools/` 取数** → 底层落到 `scripts/fetch/`。
    一个源失败按 `datasources.yaml` 的降级链换下一个，**换源必须记录在 `provenance` 里**。
+   `primary: NONE` 表示该数据类别尚未获准接入：不要调用对应工具，也不要尝试从
+   其他来源补齐。本阶段只有 `ohlcv` 配置为 AKShare，新闻抓取应保持静默。
 3. **清洗**（`scripts/clean/`）：
    - 交易日历对齐（A 股节假日、临时休市）
    - 停复牌处理（停牌日不得当成 0 或前值直接补）
@@ -64,5 +66,4 @@ tools: [fetch_market_data, fetch_financials, fetch_news, clean_dataset]
 - ❌ 不静默换源、不静默改口径。
 - ✅ 数据全部拿不到 → `dataset.json` 里整体标 `blocked` 并说明原因，交回 orchestrator。
 
-<!-- TODO(datasource): 具体数据源（akshare / tushare / 自建库）未确定，
-     scripts/fetch/ 下全部为空实现，实现前不要假装能取到数据 -->
+<!-- datasource decision: OHLCV=AKShare.stock_zh_a_hist；财务/新闻/资金流仍未确定。 -->

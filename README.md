@@ -9,10 +9,9 @@
 2. **教学目标** —— 让学生看清一个 agentic workflow 是由哪些零件组成的、
    零件之间怎么咬合、以及为什么要这样拆。
 
-> ⚠️ **当前状态：骨架完成，业务内容为空。**
-> 数据源 API 与投资策略尚未确定，所有涉及"具体怎么算""从哪拿数据"的地方都是
-> `TODO(datasource)` / `TODO(strategy)` 占位。**这是设计，不是未完成。**
-> 骨架先立住，内容后填——填内容正是学生的作业。
+> ⚠️ **当前状态：骨架完成，AKShare OHLCV 最小链路已接通。**
+> 财务、新闻 API 与投资策略仍未确定，对应位置继续保留
+> `TODO(datasource)` / `TODO(strategy)`。新闻抓取当前显式关闭。
 
 ---
 
@@ -238,7 +237,8 @@ A-stock/
 │   ├── tool_manifest.yaml           工具注册表
 │   ├── init_run.py                  ✅ 已实现
 │   ├── validate_artifact.py         ✅ 已实现
-│   └── fetch_*.py / compute_*.py    ⬜ 空壳，等数据源与策略确定
+│   ├── fetch_market_data.py           ✅ AKShare OHLCV
+│   └── 其他 fetch_*.py / compute_*.py ⬜ 空壳，等数据源与策略确定
 │
 ├── schemas/                     ④ 文件契约（JSON Schema）
 │   ├── run_manifest.schema.json
@@ -320,7 +320,7 @@ cp config/universe.example.yaml    config/universe.yaml
 cp config/datasources.example.yaml config/datasources.yaml
 ```
 
-Python >= 3.10，所有命令从仓库根目录执行。
+Python >= 3.11，所有命令从仓库根目录执行。
 
 ### 看懂骨架（不需要任何数据源）
 
@@ -333,11 +333,11 @@ cat workspace/runs/2026-01-02_example/report.md
 python tools/validate_artifact.py --run-id 2026-01-02_example --artifact dataset
 python tools/validate_artifact.py --run-id 2026-01-02_example --artifact report
 
-# 3. 新建一个自己的 run 目录
-python tools/init_run.py --targets 600519.SH --as-of 2026-01-02 --slug myfirst
+# 3. 新建一个 AKShare 教学 run
+python tools/init_run.py --targets 600552.SH 600667.SH 603290.SH 300598.SZ 301047.SZ --as-of 2026-08-28 --slug akshare-demo
 
-# 4. 看数据流水线骨架（会如实告诉你每一步都还没实现）
-python scripts/run_pipeline.py --run-id myfirst --codes 600519.SH
+# 4. 拉取未复权日线（新闻不会被调用）
+python tools/fetch_market_data.py --run-id 2026-08-28_akshare-demo --params-file config/market_data.demo.json
 
 # 5. 跑测试
 pytest tests/ -v
@@ -392,7 +392,9 @@ pytest tests/ -v
 
 | 留白项 | 标记 | 卡在哪 | 影响 |
 |---|---|---|---|
-| 数据源选型（akshare / tushare / 自建） | `TODO(datasource)` | 未决 | `scripts/fetch/*` 全部空实现 |
+| OHLCV 数据源 | 已确认 | AKShare `stock_zh_a_hist` | 行情工具已实现 |
+| 财务/估值数据源 | `TODO(datasource)` | 未决 | 基本面仍不可运行 |
+| 新闻/公告/资金流数据源 | `TODO(datasource)` | 未决 | 新闻抓取静默，情绪面仍不可运行 |
 | 复权口径（前复权 / 后复权） | `TODO(strategy)` | 未决 | 技术面所有指标 |
 | 行业分类标准（申万 / 中证 / 证监会） | `TODO(strategy)` | 未决 | 基本面同业对比 |
 | 财务指标口径、阈值、打分体系 | `TODO(strategy)` | 未决 | `fundamental.json` 的 score 全为 null |

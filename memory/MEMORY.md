@@ -11,6 +11,7 @@
 ## 决策（decisions/）
 
 - [ADR-0001 用文件契约做 agent 通信](decisions/0001-file-contract.md) — 为什么不用内存传参
+- [ADR-0002 AKShare 仅用于第一阶段 OHLCV](decisions/0002-akshare-for-ohlcv.md) — 行情已接入，新闻等类别保持关闭
 
 ## 运行记录（runs/）
 

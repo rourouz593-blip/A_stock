@@ -1,0 +1,27 @@
+# 当前生效的数据源配置。未确认的数据类别显式设为 NONE。
+version: 1
+
+blocks:
+  ohlcv:
+    primary: AKSHARE_EASTMONEY
+    fallbacks: [AKSHARE_TENCENT]
+  financials: {primary: NONE, fallbacks: []}
+  valuation: {primary: NONE, fallbacks: []}
+  announcements: {primary: NONE, fallbacks: []}
+  news: {primary: NONE, fallbacks: []}
+  moneyflow: {primary: NONE, fallbacks: []}
+  social: {primary: NONE, fallbacks: []}
+
+sources:
+  AKSHARE_EASTMONEY:
+    kind: python_library
+    auth_env: ~
+    interface: stock_zh_a_hist
+    upstream: Eastmoney
+    notes: "仅用于 A 股 OHLCV；新闻抓取保持关闭"
+  AKSHARE_TENCENT:
+    kind: python_library
+    auth_env: ~
+    interface: stock_zh_a_hist_tx
+    upstream: Tencent
+    notes: "仅作日线备用源；新闻抓取保持关闭"

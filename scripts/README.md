@@ -14,12 +14,14 @@ scripts/
 └── run_pipeline.py  # 不经过 agent，直接跑数据流水线（调试用）
 ```
 
-## 当前状态：全部为空实现
+## 当前状态：OHLCV 已实现，其余为空实现
 
-每个函数都有完整的签名、类型标注和 docstring，函数体是 `raise NotImplementedError`。
+`fetch/market_data.py:fetch_ohlcv` 已通过 AKShare 接入；它校验上游字段、统一字段名，
+并返回带 `Provenance` / `QualityFlag` 的 `DataBlock`。交易日历、财务、新闻、清洗与存储
+仍然明确抛出 `NotImplementedError`。
 
-**这是刻意的。** 数据源尚未确定（akshare / tushare / 自建库各有取舍），
-先把接口钉死、把口径写清楚，实现是后面的事——也是学生的作业。
+**这是刻意的渐进实现。** 用户已经确认 AKShare 用于行情，但没有授权它承担其他数据
+类别。先接通一条最小链路，学生能清楚看到 contract → script → tool → artifact 的关系。
 
 ## 填空的正确顺序
 

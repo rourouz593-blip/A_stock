@@ -1,48 +1,42 @@
 # 数据源配置。复制为 datasources.yaml 后使用
-# TODO(datasource): 全部为占位，真实数据源确定后填写
+# 当前只确认了 OHLCV 数据源；其余类别保持 NONE。
 version: 1
 
 # 每类数据的主源与降级链。data-engineer 按顺序尝试，
 # 一旦降级必须记录在 dataset.json 的 provenance.fallback_from
 blocks:
   ohlcv:
-    primary: EXAMPLE_SOURCE_A
-    fallbacks: [EXAMPLE_SOURCE_B]
+    primary: AKSHARE_EASTMONEY
+    fallbacks: [AKSHARE_TENCENT]
   financials:
-    primary: EXAMPLE_SOURCE_B
+    primary: NONE
     fallbacks: []
   valuation:
-    primary: EXAMPLE_SOURCE_B
+    primary: NONE
     fallbacks: []
   announcements:
-    primary: EXAMPLE_SOURCE_C
+    primary: NONE
     fallbacks: []
   news:
-    primary: EXAMPLE_SOURCE_C
-    fallbacks: [EXAMPLE_SOURCE_D]
+    primary: NONE          # 等用户确认新闻 API；不要调用 fetch_news
+    fallbacks: []
   moneyflow:
-    primary: EXAMPLE_SOURCE_A
+    primary: NONE
     fallbacks: []
   social:
     primary: NONE          # 未配置 → sentiment-analyst 会 blocked
     fallbacks: []
 
 sources:
-  EXAMPLE_SOURCE_A:
-    kind: placeholder
+  AKSHARE_EASTMONEY:
+    kind: python_library
     auth_env: ~            # 凭证从哪个环境变量读
-    rate_limit_per_min: 0
-    notes: "TODO(datasource): 候选 akshare / baostock"
-  EXAMPLE_SOURCE_B:
-    kind: placeholder
-    auth_env: TUSHARE_TOKEN
-    rate_limit_per_min: 0
-    notes: "TODO(datasource): 候选 tushare（需积分）"
-  EXAMPLE_SOURCE_C:
-    kind: placeholder
-    auth_env: NEWS_API_KEY
-    notes: "TODO(datasource): 公告与新闻源"
-  EXAMPLE_SOURCE_D:
-    kind: placeholder
-    auth_env: NEWS_API_KEY
-    notes: "TODO(datasource): 新闻备用源"
+    interface: stock_zh_a_hist
+    upstream: Eastmoney
+    notes: "仅用于 A 股 OHLCV；每次响应都要校验字段并记录 provenance"
+  AKSHARE_TENCENT:
+    kind: python_library
+    auth_env: ~
+    interface: stock_zh_a_hist_tx
+    upstream: Tencent
+    notes: "仅作日线备用源；成交量从股换算为手，换手率从小数换算为百分比"

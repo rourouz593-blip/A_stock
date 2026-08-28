@@ -29,11 +29,11 @@ tools:
 
   - name: fetch_market_data
     entry: tools/fetch_market_data.py
-    status: stub          # TODO(datasource)
-    description: 拉取日线/分钟线行情
+    status: implemented
+    description: 通过 AKShare 拉取 A 股历史行情；日线东财失败时显式降级到腾讯
     allowed_agents: [data-engineer]
-    input: {codes: "list[str]", start: str, end: str, freq: str, adjust: str}
-    output: {path: str, rows: int, provenance: dict}
+    input: {codes: "list[str]", start: str, end: str, freq: str, adjust: str, params_file: "str 可选，Windows 友好的 JSON 请求文件"}
+    output: {status: str, path: str, rows: int, coverage: dict, provenance: dict, quality_flags: "list[dict]"}
 
   - name: fetch_financials
     entry: tools/fetch_financials.py
@@ -45,7 +45,7 @@ tools:
 
   - name: fetch_news
     entry: tools/fetch_news.py
-    status: stub          # TODO(datasource)
+    status: stub          # 有意保持静默，等待用户确认新闻 API
     description: 拉取公告、新闻与舆情
     allowed_agents: [data-engineer]
     input: {codes: "list[str]", start: str, end: str, sources: "list[str]"}

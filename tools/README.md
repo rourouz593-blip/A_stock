@@ -33,12 +33,17 @@ echo '{"run_id":"2026-01-02_example"}' | python tools/validate_artifact.py --art
 |---|---|---|
 | `init_run` | ✅ 可用 | 纯管道逻辑，已实现 |
 | `validate_artifact` | ✅ 可用 | 纯管道逻辑，已实现 |
-| `fetch_market_data` | ⬜ 空壳 | 等数据源确定 |
+| `fetch_market_data` | ✅ 可用 | AKShare A 股日/周/月历史行情 |
 | `fetch_financials` | ⬜ 空壳 | 等数据源确定 |
-| `fetch_news` | ⬜ 空壳 | 等数据源确定 |
+| `fetch_news` | ⏸️ 静默 | 等用户确认新闻 API，不调用 |
 | `clean_dataset` | ⬜ 空壳 | 等数据源确定 |
 | `compute_indicators` | ⬜ 空壳 | 等指标集合确定 |
 | `score_sentiment` | ⬜ 空壳 | 等打分口径确定 |
 
 "空壳"= CLI 骨架在、参数定义在、调用 `scripts/` 时抛 `NotImplementedError`。
-学生的作业就是把空壳填成实现。
+
+## 静态工具与动态数据
+
+工具本身应当稳定，例如 `fetch_market_data(codes, start, end, freq, adjust)`；变化的是
+每次调用产生的数据。工具把请求参数、抓取时间、实际来源和字段映射写进 provenance，
+因此同一个静态程序在不同时间返回不同数据，仍然可追溯、可复核。
