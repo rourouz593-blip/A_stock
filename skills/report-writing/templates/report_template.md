@@ -1,45 +1,57 @@
-# {{name}}（{{code}}）分析报告
+# A 股每日复盘 · {{as_of}}
 
-- **分析基准日**：{{as_of}}
-- **运行 ID**：{{run_id}}
-- **数据完整性**：{{data_completeness}}   <!-- 有任何一路 blocked 必须在此写明 -->
+- **运行模式**：{{mode}}　**运行 ID**：{{run_id}}　**生成时间**：{{generated_at}}
+- **数据完整性**：{{data_completeness}}   <!-- 有缺口必须写在这里 -->
 
-## 摘要
+{{gap_notice}}   <!-- 任何一路 blocked，第一句就声明 -->
 
-{{summary}}   <!-- 3-5 句。若存在数据缺口，第一句就要说 -->
+---
 
-## 结论一览
+## 一、市场总览
 
-| 维度 | 判断 | 置信度 | 主要依据 |
-|---|---|---|---|
-| 基本面 | {{fundamental.verdict}} | {{fundamental.confidence}} | {{...}} |
-| 技术面 | {{technical.trend_state}} | {{technical.confidence}} | {{...}} |
-| 情绪面 | {{sentiment.direction}} | {{sentiment.confidence}} | {{...}} |
+{{overview}}
 
-## 基本面
+## 二、指数复盘
 
-{{fundamental_section}}
+{{index_review}}
 
-## 技术面
+## 三、板块与题材
 
-{{technical_section}}
+{{sectors}}
 
-## 情绪面
+## 四、我的持仓计划
 
-{{sentiment_section}}
+{{positions}}
 
-## 分歧与印证
+### 行为自检
 
-{{divergence_section}}   <!-- 本报告最有价值的一节，不得省略 -->
+{{behavior_checks}}
 
-## 风险提示
+## 五、明日预案
 
-{{risks}}
+{{plan}}
 
-## 数据来源与口径
+### 时间轴
 
-{{provenance}}   <!-- 数据源、拉取时间、复权口径、quality_flags -->
+{{timeline}}
 
-## 免责声明
+## 六、新闻与公告
+
+{{news}}
+
+## 七、风险与纪律
+
+{{risk}}
+
+## 八、最终执行面板
+
+{{panel}}
+
+## 九、运行说明
+
+- 数据源：{{data_source}}　复权口径：{{adjust_mode}}　取数时间：{{fetched_at}}
+- 质量标记：{{quality_flags}}
+
+---
 
 {{disclaimer}}

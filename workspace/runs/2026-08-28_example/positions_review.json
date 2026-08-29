@@ -1,0 +1,208 @@
+{
+  "run_id": "2026-08-28_example",
+  "as_of": "2026-08-28",
+  "status": "ok",
+  "blocked_reason": null,
+  "cards": [
+    {
+      "code": "999001.SZ",
+      "name": "示例科技",
+      "sector": "示例固态电池",
+      "module": "打板",
+      "role_in_sector": "龙头",
+      "cost": 12.8,
+      "shares": 2000,
+      "close": 14.62,
+      "pnl_pct": 14.22,
+      "weight_pct": 14.6,
+      "relative_strength": {
+        "vs_index": 4.36,
+        "vs_sector": 0.48,
+        "vs_leader": 0.0,
+        "reading": "自身即龙头，相对大盘 +4.36pp、相对板块 +0.48pp，三项均为正"
+      },
+      "thesis": "题材启动第二天打板做龙头，看三日内能否走出高度",
+      "thesis_still_valid": {
+        "value": "成立",
+        "reason": "已走到 3 板且全天封板未开，板块梯队完整、有中军跟随，原逻辑（走高度）正在兑现"
+      },
+      "scenarios": {
+        "strong": {
+          "trigger": "竞价高开 3% 以上且开盘 10 分钟不破分时均价",
+          "action": "持有不动，不加仓（已是最大单票权重）"
+        },
+        "medium": {
+          "trigger": "竞价平开或小幅低开，盘中在 5 日线上方震荡",
+          "action": "持有，10:00 前若板块无第二只涨停则减半仓"
+        },
+        "weak": {
+          "trigger": "低开破 5 日线 13.42 且 30 分钟不收回",
+          "action": "全部退出，不等反弹"
+        }
+      },
+      "levels": {
+        "resistance": 16.08,
+        "support": 13.42,
+        "invalidation": 13.42,
+        "basis": "压力＝3 板后的理论涨停价；支撑与失效位取 5 日均线，与买入时设定一致"
+      },
+      "action": "持有",
+      "action_reason": "逻辑成立 + 三项相对强弱为正 + 处于梯队最前排",
+      "priority": "优先保留"
+    },
+    {
+      "code": "999002.SH",
+      "name": "示例材料",
+      "sector": "示例算力",
+      "module": "打板",
+      "role_in_sector": "前排（原龙头，已断板）",
+      "cost": 26.5,
+      "shares": 800,
+      "close": 24.18,
+      "pnl_pct": -8.75,
+      "weight_pct": 9.7,
+      "relative_strength": {
+        "vs_index": -4.49,
+        "vs_sector": 1.56,
+        "vs_leader": null,
+        "reading": "相对大盘 -4.49pp；虽相对板块 +1.56pp，但那是因为整个板块在退潮，比烂不算强"
+      },
+      "thesis": "算力题材四板龙头，赌五板高度",
+      "thesis_still_valid": {
+        "value": "已失效",
+        "reason": "昨日 4 板今日断板且收绿，板块整体退潮、梯队断裂，“赌高度”的前提已不存在"
+      },
+      "scenarios": {
+        "strong": {
+          "trigger": "竞价高开 2% 以上且板块出现新涨停",
+          "action": "反弹至 25.02（5 日线）附近全部卖出，不留仓"
+        },
+        "medium": {
+          "trigger": "平开震荡",
+          "action": "开盘 30 分钟内择机全部卖出"
+        },
+        "weak": {
+          "trigger": "低开 3% 以上",
+          "action": "开盘直接卖出，不等反弹"
+        }
+      },
+      "levels": {
+        "resistance": 25.02,
+        "support": 23.1,
+        "invalidation": 24.0,
+        "basis": "压力＝5 日线；支撑＝20 日最低；失效位为买入时设定的 24.00，今日已跌破"
+      },
+      "action": "退出",
+      "action_reason": "逻辑已失效且今日收盘 24.18 已逼近失效位 24.00，三种情景下的动作都是卖出，只是节奏不同",
+      "priority": "优先处理"
+    }
+  ],
+  "behavior_checks": [
+    {
+      "check": "卖强留弱",
+      "triggered": false,
+      "detail": "本次未发生卖出。当前组合中相对强度高的示例科技标为“优先保留”，相对强度低的示例材料标为“优先处理”，方向正确",
+      "involved_codes": []
+    },
+    {
+      "check": "把缩量下跌解释成洗盘",
+      "triggered": true,
+      "detail": "示例材料今日 -3.75%、量比 0.74（缩量），且已跌破买入时设定的失效位 24.00。板块同步退潮、梯队断裂，这不是洗盘，是没人接。如果此刻还在用“缩量洗盘”解释，就是在替已失效的逻辑找台阶",
+      "involved_codes": [
+        "999002.SH"
+      ]
+    },
+    {
+      "check": "亏损补仓",
+      "triggered": false,
+      "detail": "示例材料浮亏 -8.75%，持仓数量自 8 月 25 日买入后未变，无补仓记录",
+      "involved_codes": []
+    },
+    {
+      "check": "卖飞后追回",
+      "triggered": false,
+      "detail": "近 10 个交易日无同一代码的卖出后再买入记录",
+      "involved_codes": []
+    },
+    {
+      "check": "同一题材重复持仓",
+      "triggered": false,
+      "detail": "两只持仓分属示例固态电池与示例算力，题材不重叠。但注意：示例固态电池单一题材权重已达 14.6%，本身已是集中度风险",
+      "involved_codes": []
+    },
+    {
+      "check": "板块回流时替弱票找理由",
+      "triggered": true,
+      "detail": "示例算力板块今日整体 -5.31%、资金净流出 38.6 亿，属板块级退潮。此时若因“相对板块 +1.56pp”而认为示例材料抗跌、值得再拿一天——那是在拿“比烂”当持有理由",
+      "involved_codes": [
+        "999002.SH"
+      ]
+    },
+    {
+      "check": "短线失败后临时改成长线",
+      "triggered": false,
+      "detail": "positions.yaml 中示例材料的 module 仍为“打板”，本次复盘也按打板逻辑判定退出，未出现改口为中长线持有的情况",
+      "involved_codes": []
+    }
+  ],
+  "risk": {
+    "account_equity": 200000.0,
+    "total_market_value": 48584.0,
+    "total_position_pct": 24.3,
+    "cash_pct": 75.7,
+    "concentration": [
+      {
+        "scope": "999001.SZ",
+        "kind": "single_stock",
+        "weight_pct": 14.6,
+        "over_limit": false
+      },
+      {
+        "scope": "999002.SH",
+        "kind": "single_stock",
+        "weight_pct": 9.7,
+        "over_limit": false
+      },
+      {
+        "scope": "示例固态电池",
+        "kind": "theme",
+        "weight_pct": 14.6,
+        "over_limit": false
+      },
+      {
+        "scope": "示例算力",
+        "kind": "theme",
+        "weight_pct": 9.7,
+        "over_limit": false
+      }
+    ],
+    "per_trade_risk": [
+      {
+        "code": "999001.SZ",
+        "invalidation": 13.42,
+        "loss_at_invalidation": 2400.0,
+        "loss_pct_of_equity": 1.2,
+        "over_half_percent": true
+      },
+      {
+        "code": "999002.SH",
+        "invalidation": 24.0,
+        "loss_at_invalidation": 144.0,
+        "loss_pct_of_equity": 0.072,
+        "over_half_percent": false
+      }
+    ],
+    "max_daily_loss": 4000.0,
+    "current_drawdown_today": -736.0,
+    "stop_trading": {
+      "value": true,
+      "reason": "触发两条：① 情绪阶段为“分歧”，按纪律不新开仓；② 行为自检触发 2 条（缩量下跌当洗盘、替弱票找理由），距停手阈值 3 条尚差 1 条，但叠加①已足以停止新增。另需注意：示例科技单笔风险 1.2% 已超 0.5% 上限，属历史遗留仓位，处理方式是不加仓 + 上移失效位，而非立即砍"
+    }
+  },
+  "confidence": "medium",
+  "caveats": [
+    "本文件为教学示例，全部持仓与数值为虚构",
+    "示例科技单笔风险 1.2% 超出 0.5% 纪律线——这是刻意保留的示例，演示“已经超限的存量仓位该怎么处理”",
+    "卖强留弱 / 亏损补仓 / 卖飞追回 三条自检依赖交易流水，当前仅有静态持仓，判定为近似结果"
+  ]
+}

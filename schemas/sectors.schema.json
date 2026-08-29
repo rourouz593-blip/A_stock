@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sectors.schema.json",
+  "title": "板块与题材",
+  "description": "sector-analyst 产出。对应报告章节三。禁止只按涨幅榜排序得出结论",
+  "type": "object",
+  "required": [
+    "run_id",
+    "as_of",
+    "status",
+    "directions",
+    "confidence",
+    "caveats"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "as_of": {
+      "type": "string"
+    },
+    "status": {
+      "$ref": "_common.defs.json#/$defs/status"
+    },
+    "blocked_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "directions": {
+      "type": "array",
+      "description": "五类方向：今日主线 / 次主线轮动 / 指数共振 / 逆指数抱团 / 退潮风险",
+      "items": {
+        "type": "object",
+        "required": [
+          "role",
+          "name",
+          "phase",
+          "strength_basis",
+          "verify_tomorrow"
+        ],
+        "properties": {
+          "role": {
+            "enum": [
+              "今日主线",
+              "次主线",
+              "指数共振",
+              "逆指数抱团",
+              "退潮风险"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "板块/题材名"
+          },
+          "phase": {
+            "enum": [
+              "启动",
+              "发酵",
+              "高潮",
+              "分歧",
+              "回流",
+              "退潮"
+            ],
+            "description": "所处阶段"
+          },
+          "pct_chg": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "limit_up_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "net_inflow_yi": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "主力净流入（亿元）"
+          },
+          "members": {
+            "type": "object",
+            "description": "梯队。只按涨幅排是不够的，要按“带动性”排",
+            "properties": {
+              "leader": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/member"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "龙头：定方向的那一只。没有明确龙头时为 null"
+              },
+              "core": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/member"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "中军：容量大、机构认可。没有时为 null"
+              },
+              "elastic": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/member"
+                },
+                "description": "核心弹性"
+              },
+              "front": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/member"
+                },
+                "description": "前排"
+              },
+              "back": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/member"
+                },
+                "description": "后排"
+              }
+            }
+          },
+          "strength_basis": {
+            "type": "object",
+            "description": "强弱依据。四项至少填三项，只写涨幅不算依据",
+            "properties": {
+              "linkage": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "板块联动：几只同步动"
+              },
+              "leadership": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "核心带动性：龙头带没带得动跟风"
+              },
+              "capacity": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "容量票：有没有大市值票参与"
+              },
+              "ladder": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "涨停梯队完整度"
+              },
+              "vs_index": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "相对指数强弱"
+              }
+            }
+          },
+          "verify_tomorrow": {
+            "type": "object",
+            "required": [
+              "continuation",
+              "failure"
+            ],
+            "properties": {
+              "watch": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "明日重点验证条件"
+              },
+              "continuation": {
+                "type": "string",
+                "description": "哪种表现代表延续"
+              },
+              "failure": {
+                "type": "string",
+                "description": "哪种表现代表失败"
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "_common.defs.json#/$defs/evidence"
+            }
+          }
+        }
+      }
+    },
+    "confidence": {
+      "$ref": "_common.defs.json#/$defs/confidence"
+    },
+    "caveats": {
+      "$ref": "_common.defs.json#/$defs/caveats"
+    }
+  },
+  "$defs": {
+    "member": {
+      "type": "object",
+      "required": [
+        "code",
+        "name"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "boards": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "连板数"
+        },
+        "pct_chg": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

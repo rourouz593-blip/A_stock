@@ -1,0 +1,57 @@
+{
+  "run_id": "2026-08-28_example",
+  "created_at": "2026-08-28T15:42:00+08:00",
+  "as_of": "2026-08-28",
+  "mode": "close",
+  "trading_day": true,
+  "status": "partial",
+  "steps": [
+    {
+      "agent": "data-engineer",
+      "status": "ok",
+      "artifact": "dataset.json",
+      "attempts": 1,
+      "note": "分时接口失败一次后重试成功；北向资金块缺失"
+    },
+    {
+      "agent": "market-analyst",
+      "status": "ok",
+      "artifact": "market.json",
+      "attempts": 1,
+      "note": null
+    },
+    {
+      "agent": "sector-analyst",
+      "status": "ok",
+      "artifact": "sectors.json",
+      "attempts": 1,
+      "note": null
+    },
+    {
+      "agent": "news-analyst",
+      "status": "ok",
+      "artifact": "news.json",
+      "attempts": 1,
+      "note": null
+    },
+    {
+      "agent": "position-advisor",
+      "status": "ok",
+      "artifact": "positions_review.json",
+      "attempts": 1,
+      "note": null
+    },
+    {
+      "agent": "report-writer",
+      "status": "ok",
+      "artifact": "report.json",
+      "attempts": 1,
+      "note": null
+    }
+  ],
+  "notes": [
+    "本目录为教学示例，全部数值为虚构假数据",
+    "999001.SZ 示例科技 / 999002.SH 示例材料 均非真实股票",
+    "刻意保留 northbound 块 missing，演示“缺一块时系统如何诚实降级”"
+  ]
+}

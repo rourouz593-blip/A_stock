@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "market.schema.json",
+  "title": "市场总览与指数复盘",
+  "description": "market-analyst 产出。对应报告章节一与章节二",
+  "type": "object",
+  "required": ["run_id", "as_of", "status", "overview", "index_review", "confidence", "caveats"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "as_of": {"type": "string"},
+    "status": {"$ref": "_common.defs.json#/$defs/status"},
+    "blocked_reason": {"type": ["string", "null"]},
+
+    "overview": {
+      "type": "object",
+      "description": "章节一：市场总览。数字一律来自 dataset，不得自行估算",
+      "required": ["indexes", "turnover", "breadth", "market_state", "emotion_phase"],
+      "properties": {
+        "indexes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "close", "pct_chg"],
+            "properties": {
+              "name": {"type": "string"},
+              "code": {"type": "string"},
+              "open": {"type": ["number", "null"]},
+              "close": {"type": ["number", "null"]},
+              "high": {"type": ["number", "null"]},
+              "low": {"type": ["number", "null"]},
+              "pct_chg": {"type": ["number", "null"]},
+              "amount_yi": {"type": ["number", "null"]}
+            }
+          }
+        },
+        "turnover": {
+          "type": "object",
+          "properties": {
+            "total_yi": {"type": ["number", "null"]},
+            "prev_total_yi": {"type": ["number", "null"]},
+            "chg_yi": {"type": ["number", "null"]},
+            "chg_pct": {"type": ["number", "null"]},
+            "reading": {"type": "string", "description": "放量/缩量/持平，及其含义"}
+          }
+        },
+        "breadth": {
+          "type": "object",
+          "properties": {
+            "up": {"type": ["integer", "null"]},
+            "down": {"type": ["integer", "null"]},
+            "limit_up": {"type": ["integer", "null"]},
+            "limit_down": {"type": ["integer", "null"]},
+            "broken_board_rate": {"type": ["number", "null"], "description": "炸板率 %"},
+            "promotion_rate": {"type": ["number", "null"], "description": "连板晋级率 %"},
+            "highest_board": {"type": ["integer", "null"]},
+            "ladder": {"type": ["object", "null"], "description": "连板梯队，如 {\"1板\":30,\"2板\":8}"}
+          }
+        },
+        "market_state": {
+          "type": "object",
+          "required": ["value", "basis"],
+          "properties": {
+            "value": {"enum": ["强势", "震荡", "弱势"]},
+            "basis": {"type": "string", "description": "判断依据，必须引用具体数字"}
+          }
+        },
+        "emotion_phase": {
+          "type": "object",
+          "required": ["value", "basis"],
+          "properties": {
+            "value": {"enum": ["冰点", "修复", "主升", "分歧", "退潮"]},
+            "basis": {"type": "string"},
+            "evidence": {"type": "array", "items": {"$ref": "_common.defs.json#/$defs/evidence"}}
+          }
+        }
+      }
+    },
+
+    "index_review": {
+      "type": "object",
+      "description": "章节二：指数复盘",
+      "required": ["sessions", "why", "key_levels", "day_type"],
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "description": "早盘 / 上午 / 午后 / 尾盘 四段",
+          "items": {
+            "type": "object",
+            "required": ["session", "narrative"],
+            "properties": {
+              "session": {"enum": ["早盘", "上午", "午后", "尾盘"]},
+              "pct_chg_in_session": {"type": ["number", "null"]},
+              "narrative": {"type": "string"},
+              "driver": {"type": ["string", "null"], "description": "这一段是谁带动的"}
+            }
+          }
+        },
+        "why": {"type": "string", "description": "指数为什么涨/跌，归因到具体板块或权重"},
+        "resonant_sectors": {"type": "array", "items": {"type": "string"}, "description": "与指数正向共振"},
+        "independent_sectors": {"type": "array", "items": {"type": "string"}, "description": "逆指数独立走强"},
+        "drag_sectors": {"type": "array", "items": {"type": "string"}, "description": "拖累指数的权重"},
+        "key_levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["index", "type", "level", "basis"],
+            "properties": {
+              "index": {"type": "string"},
+              "type": {"enum": ["support", "resistance"]},
+              "level": {"type": "number"},
+              "basis": {"type": "string", "description": "可复现的依据，禁止写“看图判断”"}
+            }
+          }
+        },
+        "day_type": {
+          "type": "object",
+          "required": ["value", "basis"],
+          "properties": {
+            "value": {"enum": ["主升", "修复", "震荡", "冲高回落"]},
+            "basis": {"type": "string"}
+          }
+        }
+      }
+    },
+
+    "confidence": {"$ref": "_common.defs.json#/$defs/confidence"},
+    "caveats": {"$ref": "_common.defs.json#/$defs/caveats"}
+  }
+}

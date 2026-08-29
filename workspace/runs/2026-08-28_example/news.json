@@ -1,0 +1,117 @@
+{
+  "run_id": "2026-08-28_example",
+  "as_of": "2026-08-28",
+  "status": "ok",
+  "blocked_reason": null,
+  "items": [
+    {
+      "time": "2026-08-28 08:42",
+      "title": "示例部委发布固态电池中试线建设指引",
+      "source": "示例部委官网",
+      "source_tier": "T1",
+      "url": null,
+      "category": "政策",
+      "polarity": "利好",
+      "certainty": "fact",
+      "related_sectors": [
+        "示例固态电池"
+      ],
+      "related_codes": [],
+      "impact": "属产业政策定调，落地节奏未定。短期影响预期而非业绩，对应板块今日 +4.62% 已部分反映",
+      "horizon": "数日"
+    },
+    {
+      "time": "2026-08-28 11:20",
+      "title": "示例科技公告：与示例车企签订固态电池样品供货协议",
+      "source": "交易所公告",
+      "source_tier": "T1",
+      "url": null,
+      "category": "公司",
+      "polarity": "利好",
+      "certainty": "fact",
+      "related_sectors": [
+        "示例固态电池"
+      ],
+      "related_codes": [
+        "999001.SZ"
+      ],
+      "impact": "样品阶段，金额未披露，对当期业绩无实质影响；但为龙头地位提供了公告层面的支撑",
+      "horizon": "数日"
+    },
+    {
+      "time": "2026-08-28 14:05",
+      "title": "市场传闻示例算力龙头订单不及预期",
+      "source": "示例财经社群",
+      "source_tier": "T4",
+      "url": null,
+      "category": "产业",
+      "polarity": "利空",
+      "certainty": "rumor",
+      "related_sectors": [
+        "示例算力"
+      ],
+      "related_codes": [
+        "999002.SH"
+      ],
+      "impact": "传闻，无任何官方来源。板块午后加速下跌与之时间吻合，但不能据此认定因果——退潮在传闻出现前已经开始",
+      "horizon": "不确定"
+    },
+    {
+      "time": "2026-08-28 09:15",
+      "title": "示例统计局公布 7 月工业增加值同比 +4.1%",
+      "source": "示例统计局",
+      "source_tier": "T1",
+      "url": null,
+      "category": "政策",
+      "polarity": "中性",
+      "certainty": "fact",
+      "related_sectors": [],
+      "related_codes": [],
+      "impact": "与市场预期基本一致，未见明显交易反应",
+      "horizon": "中期"
+    },
+    {
+      "time": "2026-08-28 16:30",
+      "title": "示例交易所向示例材料下发关注函",
+      "source": "交易所公告",
+      "source_tier": "T1",
+      "url": null,
+      "category": "公司",
+      "polarity": "利空",
+      "certainty": "fact",
+      "related_sectors": [
+        "示例算力"
+      ],
+      "related_codes": [
+        "999002.SH"
+      ],
+      "impact": "盘后发布，要求说明股价异动原因。历史经验上关注函多导致次日低开，需在明日竞价重点观察",
+      "horizon": "当日"
+    }
+  ],
+  "overseas_tech": {
+    "summary": "隔夜示例海外科技指数 -1.2%，半导体板块领跌，对次日国内算力/半导体开盘情绪偏负面",
+    "direction": "negative"
+  },
+  "verification_log": [
+    {
+      "date": "2026-08-27",
+      "title": "示例算力厂商宣布扩产",
+      "expected": "利好，示例算力板块延续",
+      "actual": "板块今日 -5.31%，龙头断板",
+      "verdict": "证伪"
+    },
+    {
+      "date": "2026-08-27",
+      "title": "固态电池行业会议召开",
+      "expected": "利好，关注示例固态电池",
+      "actual": "板块今日 +4.62%，9 只涨停",
+      "verdict": "兑现"
+    }
+  ],
+  "confidence": "medium",
+  "caveats": [
+    "本文件为教学示例，全部新闻均为虚构",
+    "关注函为盘后信息，其影响需在次日价格中验证，本报告不预判方向"
+  ]
+}

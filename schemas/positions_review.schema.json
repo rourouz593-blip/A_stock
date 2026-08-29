@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "positions_review.schema.json",
+  "title": "持仓计划与风险纪律",
+  "description": "position-advisor 产出。对应报告章节四与章节七",
+  "type": "object",
+  "required": ["run_id", "as_of", "status", "cards", "behavior_checks", "risk", "confidence", "caveats"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "as_of": {"type": "string"},
+    "status": {"$ref": "_common.defs.json#/$defs/status"},
+    "blocked_reason": {"type": ["string", "null"]},
+
+    "cards": {
+      "type": "array",
+      "description": "章节四：每只持仓一张独立卡片",
+      "items": {
+        "type": "object",
+        "required": ["code", "name", "sector", "thesis_still_valid", "scenarios", "levels", "action", "priority"],
+        "properties": {
+          "code": {"type": "string"},
+          "name": {"type": "string"},
+          "sector": {"type": "string", "description": "所属板块"},
+          "module": {"type": ["string", "null"], "description": "交易模块：打板/低吸/趋势/套利"},
+          "role_in_sector": {"type": ["string", "null"], "description": "个股地位：龙头/中军/前排/后排/杂毛"},
+          "cost": {"type": ["number", "null"]},
+          "shares": {"type": ["integer", "null"]},
+          "close": {"type": ["number", "null"]},
+          "pnl_pct": {"type": ["number", "null"]},
+          "weight_pct": {"type": ["number", "null"]},
+          "relative_strength": {
+            "type": "object",
+            "description": "今日相对强弱，单位百分点",
+            "properties": {
+              "vs_index": {"type": ["number", "null"]},
+              "vs_sector": {"type": ["number", "null"]},
+              "vs_leader": {"type": ["number", "null"]},
+              "reading": {"type": ["string", "null"]}
+            }
+          },
+          "thesis": {"type": ["string", "null"], "description": "当初的买入逻辑（来自 positions.yaml）"},
+          "thesis_still_valid": {
+            "type": "object",
+            "required": ["value", "reason"],
+            "properties": {
+              "value": {"enum": ["成立", "部分成立", "已失效", "无法判断"]},
+              "reason": {"type": "string"}
+            }
+          },
+          "scenarios": {
+            "type": "object",
+            "description": "明日强/中/弱三种情景",
+            "required": ["strong", "medium", "weak"],
+            "properties": {
+              "strong": {"$ref": "#/$defs/scenario"},
+              "medium": {"$ref": "#/$defs/scenario"},
+              "weak": {"$ref": "#/$defs/scenario"}
+            }
+          },
+          "levels": {
+            "type": "object",
+            "required": ["invalidation"],
+            "properties": {
+              "resistance": {"type": ["number", "null"]},
+              "support": {"type": ["number", "null"]},
+              "invalidation": {"type": ["number", "null"], "description": "失效位：破了就承认判断错了"},
+              "basis": {"type": ["string", "null"]}
+            }
+          },
+          "action": {
+            "enum": ["持有", "减仓", "退出", "禁止加仓", "确认后可加仓"],
+            "description": "唯一动作，不许并列两个"
+          },
+          "action_reason": {"type": "string"},
+          "priority": {"enum": ["优先保留", "继续观察", "优先处理"]}
+        }
+      }
+    },
+
+    "behavior_checks": {
+      "type": "array",
+      "description": "章节四强制自检：七种典型错误行为，每种都要给出结论",
+      "minItems": 7,
+      "items": {
+        "type": "object",
+        "required": ["check", "triggered", "detail"],
+        "properties": {
+          "check": {
+            "enum": ["卖强留弱", "把缩量下跌解释成洗盘", "亏损补仓", "卖飞后追回",
+                     "同一题材重复持仓", "板块回流时替弱票找理由", "短线失败后临时改成长线"]
+          },
+          "triggered": {"type": "boolean"},
+          "detail": {"type": "string", "description": "触发就指名道姓；没触发也要说明依据"},
+          "involved_codes": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+
+    "risk": {
+      "type": "object",
+      "description": "章节七：风险与纪律。数字由 tools/compute_risk.py 算出，不许模型心算",
+      "required": ["account_equity", "total_position_pct", "per_trade_risk", "stop_trading"],
+      "properties": {
+        "account_equity": {"type": ["number", "null"]},
+        "total_market_value": {"type": ["number", "null"]},
+        "total_position_pct": {"type": ["number", "null"]},
+        "cash_pct": {"type": ["number", "null"]},
+        "concentration": {
+          "type": "array",
+          "description": "单票与同题材风险",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scope": {"type": "string", "description": "股票代码或题材名"},
+              "weight_pct": {"type": "number"},
+              "over_limit": {"type": "boolean"}
+            }
+          }
+        },
+        "per_trade_risk": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["code", "loss_at_invalidation", "loss_pct_of_equity", "over_half_percent"],
+            "properties": {
+              "code": {"type": "string"},
+              "invalidation": {"type": ["number", "null"]},
+              "loss_at_invalidation": {"type": ["number", "null"], "description": "跌到失效位的亏损金额"},
+              "loss_pct_of_equity": {"type": ["number", "null"]},
+              "over_half_percent": {"type": "boolean", "description": "是否超过账户 0.5%"}
+            }
+          }
+        },
+        "max_daily_loss": {"type": ["number", "null"]},
+        "current_drawdown_today": {"type": ["number", "null"]},
+        "stop_trading": {
+          "type": "object",
+          "required": ["value", "reason"],
+          "properties": {
+            "value": {"type": "boolean", "description": "是否应停止新增交易"},
+            "reason": {"type": "string"}
+          }
+        }
+      }
+    },
+
+    "confidence": {"$ref": "_common.defs.json#/$defs/confidence"},
+    "caveats": {"$ref": "_common.defs.json#/$defs/caveats"}
+  },
+  "$defs": {
+    "scenario": {
+      "type": "object",
+      "required": ["trigger", "action"],
+      "properties": {
+        "trigger": {"type": "string", "description": "什么盘面算这种情景"},
+        "action": {"type": "string", "description": "这种情景下具体怎么做"}
+      }
+    }
+  }
+}

@@ -7,13 +7,12 @@
 
 ## 0. 一句话说明
 
-这是一个**A 股市场多智能体分析工厂（harness factory）**的骨架仓库。
-它把「基本面 / 技术面 / 情绪面」三路分析拆成独立 agent，由一个 orchestrator 编排，
-所有 agent 之间**只通过文件契约通信**（不共享内存、不互相调用函数）。
+这是一个 **A 股每日复盘的多智能体系统**。
+每个交易日收盘后自动跑一遍，产出一份九章报告 + 一个 HTML 仪表盘：
+市场总览 → 指数复盘 → 板块题材 → 我的持仓 → 明日预案 → 新闻公告 → 风险纪律 → 执行面板 → 运行说明。
 
-**当前状态：骨架已完成，行情取数已接入 AKShare，其余业务仍为空。** AKShare 只被批准
-用于 A 股 OHLCV；财务、新闻 API 与投资策略尚未确定。其余 `TODO` 占位是刻意设计，
-不是未完成的 bug。
+数据源是 **AKShare**（免费、无 token）。
+Agent 之间**只通过文件契约通信**，不共享内存、不互相调用函数。
 
 ---
 
@@ -22,110 +21,156 @@
 | 目录 | 是什么 | 你什么时候动它 |
 |---|---|---|
 | `AGENTS.md` | 你正在读的这份手册 | 新增 agent / 改变编排规则时 |
-| `agents/` | 6 个 agent 的角色定义（Markdown + YAML frontmatter） | 定义角色职责、输入输出 |
-| `skills/` | 可复用的专业技能包（方法论、检查清单、模板） | 沉淀"怎么做一件事"的知识 |
-| `tools/` | agent 可调用的 CLI 工具（对 `scripts/` 的薄封装） | 让 agent 能"动手"而不是只能"说话" |
-| `scripts/` | 数据抓取 / 清洗 / 存储的 Python 代码 | 接入真实数据源时 |
-| `schemas/` | JSON Schema，定义 agent 之间传递的文件长什么样 | 改变 agent 产物结构时 |
-| `workspace/` | 运行时产物交换区，一次分析 = 一个 run 目录 | 运行时自动写入，不手改 |
-| `memory/` | 长期记忆：知识沉淀、决策记录、历史复盘 | 每次 run 结束后追加 |
-| `config/` | 股票池、流水线开关、参数 | 调整分析范围与参数 |
+| `agents/` | 7 个 agent 的角色定义（Markdown + YAML frontmatter） | 定义职责、输入输出 |
+| `skills/` | 8 个技能包（方法论、判定框架、模板） | 沉淀"怎么做一件事" |
+| `tools/` | 6 个 CLI 工具（JSON 进 JSON 出） | 让 agent 能"动手"而不只是"说话" |
+| `scripts/` | AKShare 取数、清洗、派生、落盘 | 数据接口变更、加新数据块 |
+| `schemas/` | JSON Schema，定义 agent 之间传的文件长什么样 | 改产物结构时（**先改这里**） |
+| `workspace/` | 运行时产物交换区，一次复盘 = 一个 run 目录 | 运行时自动写入，不手改 |
+| `memory/` | 长期记忆：AKShare 踩坑、口径约定、ADR、运行流水 | 每次 run 结束后追加 |
+| `config/` | 持仓、阈值、运行模式 | 调参数（**最常动的是 thresholds.yaml**） |
 | `docs/` | 面向学生的教学文档 | 教学内容更新时 |
-| `tests/` | 契约与数据层测试 | 写实现的同时补测试 |
+| `tests/` | 契约测试 + 派生指标测试（全 mock，不联网） | 改逻辑的同时补测试 |
 
 ---
 
-## 2. 六个 Agent 与调用顺序
+## 2. 七个 Agent 与调用顺序
 
 ```
-                        ┌──────────────────┐
-                        │  orchestrator    │  ← 总控，唯一有权决定"下一步"的角色
-                        └────────┬─────────┘
-                                 │ 1) 建 run 目录、写 run_manifest.json
-                                 ▼
-                        ┌──────────────────┐
-                        │  data-engineer   │  调 tools/ → scripts/ 拉数、清洗、落盘
-                        └────────┬─────────┘
-                                 │ 产出 dataset.json（唯一数据事实来源）
-                 ┌───────────────┼───────────────┐
-                 ▼               ▼               ▼
-     ┌────────────────┐ ┌────────────────┐ ┌────────────────┐
-     │ fundamental-   │ │ technical-     │ │ sentiment-     │   ← 三者可并行
-     │ analyst        │ │ analyst        │ │ analyst        │
-     └───────┬────────┘ └───────┬────────┘ └───────┬────────┘
-             │ fundamental.json │ technical.json   │ sentiment.json
-             └───────────────┬──┴──────────────────┘
-                             ▼
-                    ┌──────────────────┐
-                    │  report-writer   │  汇总三份结论 → report.md + report.json
-                    └──────────────────┘
+                      ┌──────────────────┐
+                      │  orchestrator    │  总控：定模式与日期、派发、校验
+                      └────────┬─────────┘
+                               │ ① init_run → run_manifest.json
+                               ▼
+                      ┌──────────────────┐
+                      │  data-engineer   │  跑 fetch_dataset（AKShare）
+                      └────────┬─────────┘
+                               │ ② dataset.json（唯一事实来源）
+                               ▼
+                      ┌──────────────────┐
+                      │  market-analyst  │  ①市场总览 ②指数复盘
+                      └────────┬─────────┘
+                               │ ③ market.json
+                 ┌─────────────┴─────────────┐
+                 ▼                           ▼
+        ┌──────────────────┐        ┌──────────────────┐
+        │  sector-analyst  │        │   news-analyst   │   ④ 可并行
+        │  ③板块与题材      │        │   ⑥新闻与公告     │
+        └────────┬─────────┘        └────────┬─────────┘
+                 │ sectors.json              │ news.json
+                 └─────────────┬─────────────┘
+                               ▼
+                      ┌──────────────────┐
+                      │ position-advisor │  ④持仓计划 ⑦风险纪律
+                      └────────┬─────────┘
+                               │ ⑤ positions_review.json
+                               ▼
+                      ┌──────────────────┐
+                      │  report-writer   │  ⑤明日预案 ⑧执行面板 + 成文
+                      └────────┬─────────┘
+                               ▼
+                 report.json / report.md / report.html
 ```
+
+**为什么 sector 要等 market？** 因为"逆指数独立走强"这个判断，
+必须先知道指数今天是什么状态。这是全流程唯一一处**必要的串行**。
 
 **硬规则：**
 
-1. 三个分析 agent **只读 `dataset.json`**，不许自己去抓数据。
-   （教学要点：数据获取与数据分析分离，才能保证三路结论建立在同一份事实上。）
+1. 分析 agent **只读 `dataset.json`（与上游产物）**，不许自己去抓数据。
 2. 每个 agent 只写**自己名下的产物文件**，不许改别人的。
-3. `report-writer` **只读三份分析产物**，不许重新读原始数据、不许自己下结论。
-4. 任何 agent 拿不到需要的输入 → 写 `blocked` 状态到自己的产物里并退出，**不许编造数据**。
+3. `report-writer` **只读上游四份产物**，不引入新信息、不重新分析。
+4. 任何 agent 拿不到需要的输入 → 写 `blocked` 到自己的产物里并退出，**不许编造数据**。
+5. **非交易日不出当日复盘。** 没有当日行情就没有当日复盘。
 
 ---
 
-## 3. 文件契约（Agent 之间唯一的通信方式）
+## 3. 文件契约
 
-一次分析运行的目录结构：
+一次复盘运行的目录结构：
 
 ```
-workspace/runs/<YYYY-MM-DD>_<slug>/
-├── run_manifest.json      # orchestrator 写：本次 run 的标的、时间窗、各步状态
-├── dataset.json           # data-engineer 写：清洗后的结构化数据（或指向 parquet 的路径）
-├── fundamental.json       # fundamental-analyst 写
-├── technical.json         # technical-analyst 写
-├── sentiment.json         # sentiment-analyst  写
-├── report.json            # report-writer 写：结构化最终结论
-├── report.md              # report-writer 写：给人看的报告
-└── logs/                  # 各 agent 的过程日志（可选）
+workspace/runs/<YYYY-MM-DD>_<mode>/
+├── run_manifest.json        # orchestrator：模式、日期、各步状态
+├── dataset.json             # data-engineer：12 个数据块 + 质量标记
+├── market.json              # market-analyst：章节①②
+├── sectors.json             # sector-analyst：章节③
+├── news.json                # news-analyst：章节⑥
+├── positions_review.json    # position-advisor：章节④⑦
+├── report.json              # report-writer：章节⑤⑧ + 全文
+├── report.md                # 给人读、可 diff
+├── report.html              # 单文件仪表盘，浏览器直接打开
+└── logs/
 ```
+
+明细数据（几百行的涨停池、板块表）落在 `data/<run_id>/*.csv`，
+`dataset.json` 只放摘要与路径——否则它会大到塞不进模型上下文。
 
 每种文件的结构由 `schemas/*.schema.json` 定义。**改结构 = 先改 schema，再改 agent 定义。**
-`workspace/runs/2026-01-02_example/` 下有一份填了假数据的完整示例，照着抄即可。
+`workspace/runs/2026-08-28_example/` 是一份填了虚构数据的完整示例，照着抄即可。
 
 ---
 
-## 4. 你（coding agent）该怎么干活
+## 4. 四种运行模式（章节九）
 
-### 场景 A：要接入真实数据源
-1. 读 `scripts/README.md` 与 `scripts/contracts.py`
-2. 在 `scripts/fetch/` 里实现对应的 `NotImplementedError` 函数
-3. 在 `tools/tool_manifest.yaml` 里登记新工具
-4. 补 `tests/`
+| mode | 时机 | 跑哪些步骤 |
+|---|---|---|
+| `close` | 交易日收盘后 15:30 | 全量九章 |
+| `premarket` | 次日 08:45 | 隔夜消息更新章节⑤⑥⑧，①②③沿用昨日 |
+| `positions` | 用户改了 `config/positions.yaml` | 只重跑章节④⑦⑧ |
+| `weekly` | 周末 | 周复盘 + 下周三情景预案 + 本周纪律统计 |
 
-### 场景 B：要实现某一路分析逻辑
-1. 读对应的 `agents/<name>.md`（职责与输入输出）
-2. 读它引用的 `skills/`（方法论）
-3. 把结论按 `schemas/<name>.schema.json` 写进 run 目录
+配置见 `config/pipeline.yaml`。
 
-### 场景 C：要新增一个 agent（比如「资金流分析」）
-1. `agents/` 加一个 `.md`（照抄现有 frontmatter 字段）
-2. `schemas/` 加它的产物 schema
-3. 在 `agents/orchestrator.md` 的调度表里加一行
-4. 在本文件第 2 节的图里加上它
+---
+
+## 5. 你（coding agent）该怎么干活
+
+### 场景 A：跑一次复盘
+```bash
+python tools/init_run.py --as-of 2026-08-28 --mode close
+python tools/fetch_dataset.py --run-id 2026-08-28_close --as-of 2026-08-28
+python tools/validate_artifact.py --run-id 2026-08-28_close --artifact dataset
+# → 然后按第 2 节的顺序派发各分析 agent
+python tools/render_report.py --run-id 2026-08-28_close
+```
+
+### 场景 B：加一类新数据
+1. 在 `scripts/fetch/` 里加取数函数，返回 `DataBlock`（必须带 `Provenance`）
+2. 在 `scripts/build_dataset.py` 里挂上
+3. 在 `schemas/dataset.schema.json` 的 `blocks.propertyNames.enum` 里登记
+4. 在 `scripts/contracts.py` 的 `BLOCK_NAMES` 里登记（有测试守着两边一致）
+
+### 场景 C：改某个分析的判断方法
+**不要改 agent 定义。** 方法论在 `skills/`，阈值在 `config/thresholds.yaml`。
+agent 定义只写"我是谁、我读什么、我写什么"。
+
+### 场景 D：新增一个 agent
+见 `docs/03-动手加一个新agent.md`，六步走完。
 
 ### 通用纪律
 - **不要跳过 schema 直接改产物结构**，这会让下游 agent 静默失败。
-- **不要把业务逻辑写进 agent 定义**；方法论进 `skills/`，代码进 `scripts/`，
-  agent 定义只写"我是谁、我读什么、我写什么"。
-- **占位就是占位**：看到 `TODO(strategy)` / `TODO(datasource)` 不要自作主张填内容，
-  这些必须由人来确认。
+- **占位就是占位**：看到 `TODO(strategy)` 不要自作主张填数值，那些是用户的经验参数。
+- **不要在 agent 里拼 HTML**：报告渲染是 `tools/render_report.py` 的事。
 
 ---
 
-## 5. 环境
+## 6. 环境
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env      # 填数据源凭证
+cp config/positions.example.yaml  config/positions.yaml
+cp config/thresholds.example.yaml config/thresholds.yaml
+cp .env.example .env        # 填 ASTOCK_ACCOUNT_EQUITY（账户总资产）
 ```
 
-Python >= 3.11。所有脚本从仓库根目录执行。
+Python >= 3.10。所有命令从仓库根目录执行。
+
+**离线自检**（不联网，验证仓库装好没有）：
+
+```bash
+python tools/make_demo_run.py
+python tools/render_report.py --run-id 2026-08-28_example
+pytest tests/ -q
+```

@@ -28,22 +28,32 @@ skills/<skill-name>/
 
 ```yaml
 ---
-name: technical-indicators
+name: sector-ladder
 description: 什么时候该加载这个技能（写清触发场景，harness 靠这句做检索）
-used_by: [technical-analyst]
-status: skeleton        # skeleton / draft / stable
+used_by: [sector-analyst, position-advisor]
+status: draft           # skeleton / draft / stable
 ---
 ```
 
-## 现有技能包
+## 现有技能包（8 个）
 
 | 技能 | 用途 | 被谁用 | 状态 |
 |---|---|---|---|
-| `a-share-market-basics` | A 股市场的制度性常识与陷阱清单 | orchestrator, data-engineer, fundamental, sentiment | skeleton |
-| `financial-statement-reading` | 财报阅读与拆解方法 | fundamental-analyst | skeleton |
-| `technical-indicators` | 指标定义、参数、读法 | technical-analyst | skeleton |
-| `sentiment-scoring` | 情绪量化口径与信源权重 | sentiment-analyst | skeleton |
-| `report-writing` | 报告结构与写作规范 | report-writer | skeleton |
+| `a-share-market-basics` | A 股制度常识、短线术语、数据口径陷阱 | 5 个 agent | draft |
+| `market-emotion-cycle` | 冰点/修复/主升/分歧/退潮 五阶段判定 | market, sector | draft |
+| `intraday-rhythm` | 日内四段拆解与归因方法 | market | draft |
+| `sector-ladder` | 板块梯队、龙头识别、五维强弱判定 | sector, position | draft |
+| `position-review` | 持仓卡片口径 + 七条行为自检 | position | draft |
+| `risk-discipline` | 仓位、单笔风险、是否停手的计算与判定 | position, report | draft |
+| `news-triage` | 信源分层、去重、三分类、次日验证 | news | draft |
+| `report-writing` | 九章结构、语言规范、仪表盘约定 | report | draft |
 
-**全部为 skeleton：只有骨架和 TODO，没有实际方法论内容。**
-这是刻意的——具体策略需要人来确定，填内容就是学生的作业。
+**状态说明**：`draft` = 框架与方法论已写，但**具体阈值仍是 `TODO(strategy)`**。
+比如"炸板率多少算退潮"——这个数需要用历史数据回测确定，或由用户按自己的经验填。
+框架是通用的，阈值是个人的，所以框架我写，阈值留给你。
+
+## 阈值集中放在哪
+
+分散在各 SKILL.md 里的 `TODO(strategy)` 是**说明**；
+真正被代码读取的数值放在 `config/thresholds.yaml`。
+改阈值改那一个文件，不要改 SKILL.md。

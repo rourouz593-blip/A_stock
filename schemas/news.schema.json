@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "news.schema.json",
+  "title": "新闻与公告分诊",
+  "description": "news-analyst 产出。对应报告章节六。禁止由新闻直接推荐个股",
+  "type": "object",
+  "required": ["run_id", "as_of", "status", "items", "confidence", "caveats"],
+  "properties": {
+    "run_id": {"type": "string"},
+    "as_of": {"type": "string"},
+    "status": {"$ref": "_common.defs.json#/$defs/status"},
+    "blocked_reason": {"type": ["string", "null"]},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["time", "title", "source", "source_tier", "polarity", "certainty"],
+        "properties": {
+          "time": {"type": "string"},
+          "title": {"type": "string"},
+          "source": {"type": "string"},
+          "source_tier": {"enum": ["T1", "T2", "T3", "T4"], "description": "T1 交易所公告/监管文件"},
+          "url": {"type": ["string", "null"]},
+          "category": {
+            "type": "string",
+            "description": "政策 / 产业 / 公司 / 外围 / 其他"
+          },
+          "polarity": {"enum": ["利好", "中性", "利空"]},
+          "certainty": {"enum": ["fact", "reported", "rumor"], "description": "rumor 永远不得升级为 fact"},
+          "related_sectors": {"type": "array", "items": {"type": "string"}},
+          "related_codes": {"type": "array", "items": {"type": "string"}},
+          "impact": {"type": "string", "description": "可能影响。写清是预期层面还是业绩层面"},
+          "horizon": {"enum": ["当日", "数日", "中期", "不确定"]}
+        }
+      }
+    },
+    "overseas_tech": {
+      "type": ["object", "null"],
+      "description": "外围科技表现（隔夜美股科技股等），影响次日科技板块情绪",
+      "properties": {
+        "summary": {"type": "string"},
+        "direction": {"enum": ["positive", "neutral", "negative", "unknown"]}
+      }
+    },
+    "verification_log": {
+      "type": "array",
+      "description": "昨日新闻的次日价格反馈验证——这是本章节最容易被跳过、也最有价值的一节",
+      "items": {
+        "type": "object",
+        "properties": {
+          "date": {"type": "string"},
+          "title": {"type": "string"},
+          "expected": {"type": "string"},
+          "actual": {"type": "string"},
+          "verdict": {"enum": ["兑现", "部分兑现", "证伪", "待观察"]}
+        }
+      }
+    },
+    "confidence": {"$ref": "_common.defs.json#/$defs/confidence"},
+    "caveats": {"$ref": "_common.defs.json#/$defs/caveats"}
+  }
+}

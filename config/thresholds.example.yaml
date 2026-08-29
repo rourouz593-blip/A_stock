@@ -1,0 +1,47 @@
+# 判定阈值。复制为 thresholds.yaml 后按自己的经验调整。
+#
+# 这是整个系统里**唯一需要你反复调**的文件。
+# skills/ 里写的是框架（怎么判断），这里写的是数值（多少算强）。
+# 框架通用，数值因人而异——所以框架我给，数值你填。
+version: 1
+
+# ── 情绪阶段判定（skills/market-emotion-cycle） ─────────────────
+# 建议用「过去 60 个交易日的分位数」而不是绝对值：
+# A 股股票总数在变、注册制后涨停家数中枢也在变，绝对值会过期。
+emotion:
+  promotion_rate:            # 连板晋级率 %
+    ice: null                # TODO(strategy) 冰点上限
+    repair: null             # TODO(strategy)
+    main_rally: null         # TODO(strategy) 主升下限
+  broken_board_rate:         # 炸板率 %
+    healthy_max: null        # TODO(strategy) 低于此算健康
+    ebb_min: null            # TODO(strategy) 高于此算退潮
+  limit_up_count:
+    ice_max: null            # TODO(strategy)
+    main_rally_min: null     # TODO(strategy)
+  highest_board:
+    ebb_max: null            # TODO(strategy) 最高板低于此且断层，视为退潮
+
+# ── 板块强弱判定（skills/sector-ladder） ───────────────────────
+sector:
+  linkage_min_limit_up: null      # TODO(strategy) 至少几只涨停才算"联动"
+  linkage_min_strong_stocks: null # TODO(strategy) 涨幅>5% 的最少家数
+  capacity_market_cap_yi: null    # TODO(strategy) 容量票市值门槛（亿元）
+  relative_strength_min: null     # TODO(strategy) 相对指数超额下限（百分点）
+
+# ── 风险纪律（skills/risk-discipline） ─────────────────────────
+risk:
+  per_trade_max_pct: 0.5     # ✅ 已确定：单笔风险不超过账户 0.5%
+  single_stock_max_pct: null # TODO(strategy) 单票权重上限 %
+  single_theme_max_pct: null # TODO(strategy) 同题材合计权重上限 %
+  max_daily_loss_pct: null   # TODO(strategy) 当日最大允许亏损 %
+  behavior_flags_to_stop: 3  # 行为自检触发几条就停止新增交易
+
+# ── 明日仓位（章节五） ──────────────────────────────────────────
+position_cap:
+  by_emotion_phase:          # 不同情绪阶段的总仓位上限 %
+    冰点: null               # TODO(strategy)
+    修复: null               # TODO(strategy)
+    主升: null               # TODO(strategy)
+    分歧: null               # TODO(strategy)
+    退潮: null               # TODO(strategy)

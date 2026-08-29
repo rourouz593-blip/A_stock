@@ -11,14 +11,15 @@ venv/
 
 # 运行时产物：示例 run 保留，真实 run 不入库
 workspace/runs/*
-!workspace/runs/2026-01-02_example/
+!workspace/runs/2026-08-28_example/
 workspace/cache/
+
+# 个人配置：持仓与阈值不入库，只保留 example
+config/positions.yaml
+config/thresholds.yaml
 
 # 数据落盘
 data/
-*.parquet
-*.duckdb
-*.sqlite3
 
 # 记忆层的运行流水（按需决定是否入库）
 memory/runs/*.json

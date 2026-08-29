@@ -13,14 +13,17 @@
 
 ## 契约清单
 
-| 文件 | 产出者 | 消费者 |
-|---|---|---|
-| `run_manifest.schema.json` | orchestrator | 所有 agent |
-| `dataset.schema.json` | data-engineer | 三个分析 agent |
-| `fundamental.schema.json` | fundamental-analyst | report-writer |
-| `technical.schema.json` | technical-analyst | report-writer |
-| `sentiment.schema.json` | sentiment-analyst | report-writer |
-| `report.schema.json` | report-writer | 人 / 下游程序 |
+| 文件 | 产出者 | 覆盖报告章节 | 消费者 |
+|---|---|---|---|
+| `run_manifest.schema.json` | orchestrator | — | 所有 agent |
+| `dataset.schema.json` | data-engineer | 全部章节的数据底座 | 四个分析 agent |
+| `market.schema.json` | market-analyst | ① 市场总览 ② 指数复盘 | sector-analyst、report-writer |
+| `sectors.schema.json` | sector-analyst | ③ 板块与题材 | position-advisor、report-writer |
+| `positions_review.schema.json` | position-advisor | ④ 持仓计划 ⑦ 风险纪律 | report-writer |
+| `news.schema.json` | news-analyst | ⑥ 新闻与公告 | report-writer |
+| `report.schema.json` | report-writer | ⑤ 明日预案 ⑧ 执行面板 + 全文 | 人 / 仪表盘渲染器 |
+
+`_common.defs.json` 放公共定义（evidence / confidence / status / caveats），被上面各份 `$ref` 引用。
 
 ## 三条通用约定
 
@@ -31,5 +34,5 @@
 
 ## 修改流程
 
-改 schema → 改对应 `agents/*.md` 的输出说明 → 改 `workspace/runs/2026-01-02_example/` 示例
+改 schema → 改对应 `agents/*.md` 的输出说明 → 改 `workspace/runs/2026-08-28_example/` 示例
 → 跑 `python tools/validate_artifact.py` 确认示例仍然合法。三步缺一不可。

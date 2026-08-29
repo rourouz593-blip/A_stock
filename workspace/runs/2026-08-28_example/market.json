@@ -1,0 +1,173 @@
+{
+  "run_id": "2026-08-28_example",
+  "as_of": "2026-08-28",
+  "status": "ok",
+  "blocked_reason": null,
+  "overview": {
+    "indexes": [
+      {
+        "name": "上证指数",
+        "code": "000001",
+        "open": 3412.55,
+        "close": 3438.21,
+        "high": 3444.9,
+        "low": 3405.12,
+        "pct_chg": 0.74,
+        "amount_yi": 5620.0
+      },
+      {
+        "name": "深证成指",
+        "code": "399001",
+        "open": 10820.4,
+        "close": 10902.6,
+        "high": 10930.1,
+        "low": 10788.3,
+        "pct_chg": 0.62,
+        "amount_yi": 6940.0
+      },
+      {
+        "name": "创业板指",
+        "code": "399006",
+        "open": 2158.9,
+        "close": 2131.7,
+        "high": 2166.2,
+        "low": 2126.4,
+        "pct_chg": -1.28,
+        "amount_yi": 3010.0
+      },
+      {
+        "name": "科创50",
+        "code": "000688",
+        "open": 1042.3,
+        "close": 1028.8,
+        "high": 1046.7,
+        "low": 1025.1,
+        "pct_chg": -1.44,
+        "amount_yi": 580.0
+      }
+    ],
+    "turnover": {
+      "total_yi": 12560.0,
+      "prev_total_yi": 11640.0,
+      "chg_yi": 920.0,
+      "chg_pct": 7.9,
+      "reading": "放量 920 亿（+7.9%），但增量集中在沪市权重，创业板成交仅 +3.2%——放量方向与题材方向不一致"
+    },
+    "breadth": {
+      "up": 3104,
+      "down": 1892,
+      "limit_up": 68,
+      "limit_down": 9,
+      "broken_board_rate": 31.3,
+      "promotion_rate": 34.5,
+      "highest_board": 5,
+      "ladder": {
+        "1板": 41,
+        "2板": 15,
+        "3板": 8,
+        "4板": 3,
+        "5板": 1
+      }
+    },
+    "market_state": {
+      "value": "震荡",
+      "basis": "上证 +0.74% 而创业板 -1.28%、科创50 -1.44%，指数分化；涨跌家数 3104/1892 偏多，但两市成交额虽放量 7.9%，增量集中在沪市权重"
+    },
+    "emotion_phase": {
+      "value": "分歧",
+      "basis": "晋级率 34.5%（昨日 55 只涨停仅 19 只续板）、炸板率 31.3% 已明显抬升，最高板 5 板但 4 板仅 3 只、5 板 1 只，梯队上方开始变薄——赚钱效应仍在但接力意愿下降，属典型分歧特征，尚未到退潮",
+      "evidence": [
+        {
+          "block": "breadth",
+          "field": "promotion_rate",
+          "value": 34.5,
+          "period": "2026-08-28"
+        },
+        {
+          "block": "breadth",
+          "field": "broken_board_rate",
+          "value": 31.3,
+          "period": "2026-08-28"
+        },
+        {
+          "block": "breadth",
+          "field": "ladder",
+          "value": {
+            "4板": 3,
+            "5板": 1
+          },
+          "period": "2026-08-28"
+        }
+      ]
+    }
+  },
+  "index_review": {
+    "sessions": [
+      {
+        "session": "早盘",
+        "pct_chg_in_session": 0.52,
+        "narrative": "高开后权重直接拉升，上证 10:00 前完成全天大部分涨幅",
+        "driver": "示例金融、示例电力两个权重板块"
+      },
+      {
+        "session": "上午",
+        "pct_chg_in_session": 0.11,
+        "narrative": "权重走平，题材开始分化，示例算力盘中冲高回落",
+        "driver": "无明确带动，成交额环比收缩"
+      },
+      {
+        "session": "午后",
+        "pct_chg_in_session": -0.08,
+        "narrative": "创业板加速下行，高位连板股批量炸板，上证靠权重护住",
+        "driver": "示例算力退潮拖累创业板"
+      },
+      {
+        "session": "尾盘",
+        "pct_chg_in_session": 0.19,
+        "narrative": "尾盘权重再度拉升，但题材股未跟随——护指数不护情绪",
+        "driver": "示例金融"
+      }
+    ],
+    "why": "指数上涨完全由沪市权重贡献（示例金融、示例电力合计拉动上证约 0.6 个点），而创业板、科创50 下跌源于示例算力板块高位退潮。这是一个典型的“指数红、情绪凉”结构。",
+    "resonant_sectors": [
+      "示例金融",
+      "示例电力"
+    ],
+    "independent_sectors": [
+      "示例固态电池"
+    ],
+    "drag_sectors": [
+      "示例算力",
+      "示例半导体"
+    ],
+    "key_levels": [
+      {
+        "index": "上证指数",
+        "type": "resistance",
+        "level": 3450.0,
+        "basis": "8 月 12 日高点 3449.6，且为整数关口"
+      },
+      {
+        "index": "上证指数",
+        "type": "support",
+        "level": 3405.0,
+        "basis": "今日最低 3405.12 + 20 日均线 3402.8 重合"
+      },
+      {
+        "index": "创业板指",
+        "type": "support",
+        "level": 2126.0,
+        "basis": "今日最低点，同时是 8 月 19 日缺口下沿"
+      }
+    ],
+    "day_type": {
+      "value": "震荡",
+      "basis": "上证振幅 1.17% 且全天在早盘区间内运行，但指数内部分化剧烈，不属于单边主升或冲高回落"
+    }
+  },
+  "confidence": "medium",
+  "caveats": [
+    "本文件为教学示例，全部数值为虚构假数据",
+    "北向资金块缺失，无法交叉验证权重拉升的资金来源"
+  ]
+}

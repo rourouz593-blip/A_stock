@@ -1,68 +1,140 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "report.schema.json",
-  "title": "最终报告（结构化）",
-  "description": "report-writer 产出。内容只能来自三份分析产物，不得引入新信息",
+  "title": "每日复盘报告（结构化）",
+  "description": "report-writer 产出。内容只能来自上游四份分析产物，不得引入新信息",
   "type": "object",
-  "required": ["run_id", "target", "as_of", "data_completeness", "summary", "verdicts", "divergences", "risks", "provenance", "disclaimer"],
+  "required": ["run_id", "as_of", "mode", "data_completeness", "plan_tomorrow", "panel", "disclaimer"],
   "properties": {
     "run_id": {"type": "string"},
-    "target": {"type": "string"},
     "as_of": {"type": "string"},
+    "mode": {"enum": ["close", "premarket", "positions", "weekly"]},
+    "generated_at": {"type": "string"},
+
     "data_completeness": {
       "type": "object",
       "required": ["level", "missing"],
       "properties": {
         "level": {"enum": ["complete", "partial", "insufficient"]},
-        "missing": {"type": "array", "items": {"type": "string"}, "description": "缺失或 blocked 的分析路径"}
+        "missing": {"type": "array", "items": {"type": "string"}},
+        "notice": {"type": "string", "description": "实时数据取不到时必须在此明示，不得静默略过"}
       }
     },
-    "summary": {"type": "string", "description": "3-5 句；有缺口必须在第一句声明"},
-    "verdicts": {
+
+    "plan_tomorrow": {
       "type": "object",
-      "description": "三路结论对照。TODO(strategy): 是否加权成总分未定，当前只做对照",
+      "description": "章节五：明日预案。主脚本 + 备选脚本 + 时间轴",
+      "required": ["scenarios", "position_cap", "forbidden", "timeline"],
       "properties": {
-        "fundamental": {"$ref": "#/$defs/verdictCell"},
-        "technical": {"$ref": "#/$defs/verdictCell"},
-        "sentiment": {"$ref": "#/$defs/verdictCell"}
-      }
-    },
-    "divergences": {
-      "type": "array",
-      "description": "报告最核心的一节：三路之间的矛盾与印证",
-      "items": {
-        "type": "object",
-        "required": ["kind", "description", "sources"],
-        "properties": {
-          "kind": {"enum": ["agreement", "conflict"]},
-          "description": {"type": "string"},
-          "possible_explanation": {"type": ["string", "null"]},
-          "sources": {"type": "array", "items": {"enum": ["fundamental", "technical", "sentiment"]}}
+        "scenarios": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["index_case", "trigger", "favored_sectors", "holding_actions"],
+            "properties": {
+              "index_case": {"enum": ["强", "中", "弱"]},
+              "trigger": {"type": "string", "description": "什么盘面算这种情景"},
+              "favored_sectors": {"type": "array", "items": {"type": "string"}},
+              "holding_actions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {"type": "string"},
+                    "action": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "position_cap": {
+          "type": "object",
+          "properties": {
+            "max_total_pct": {"type": ["number", "null"], "description": "明日总仓位上限"},
+            "new_open_pct": {"type": ["number", "null"], "description": "允许新开仓位比例"},
+            "new_open_count": {"type": ["integer", "null"], "description": "允许新开数量"}
+          }
+        },
+        "forbidden": {"type": "array", "items": {"type": "string"}, "description": "明确禁止事项"},
+        "timeline": {
+          "type": "array",
+          "description": "按时间拆解的执行脚本",
+          "items": {
+            "type": "object",
+            "required": ["window", "task"],
+            "properties": {
+              "window": {
+                "enum": ["9:15—9:25 竞价观察", "开盘1—3分钟确认", "9:30—10:00 核心执行窗口",
+                         "午后验证", "14:30 尾盘处理"]
+              },
+              "task": {"type": "string"},
+              "decision_rule": {"type": ["string", "null"], "description": "看到什么就做什么，写成 if-then"}
+            }
+          }
         }
       }
     },
-    "risks": {"type": "array", "items": {"type": "string"}},
+
+    "panel": {
+      "type": "object",
+      "description": "章节八：最终执行面板。这是唯一一屏就能看完的部分，务必极简",
+      "required": ["one_liner", "tomorrow_main", "tomorrow_risk", "keep_first",
+                   "handle_first", "actions", "signals", "discipline"],
+      "properties": {
+        "one_liner": {"type": "string", "description": "今日市场一句话定性"},
+        "tomorrow_main": {"type": "array", "items": {"type": "string"}, "description": "明日主线方向"},
+        "tomorrow_risk": {"type": "array", "items": {"type": "string"}, "description": "明日风险方向"},
+        "keep_first": {"type": "array", "items": {"type": "string"}, "description": "优先保留谁"},
+        "handle_first": {"type": "array", "items": {"type": "string"}, "description": "优先处理谁"},
+        "actions": {
+          "type": "array",
+          "description": "每只持仓唯一动作，不许并列",
+          "items": {
+            "type": "object",
+            "required": ["code", "name", "action"],
+            "properties": {
+              "code": {"type": "string"},
+              "name": {"type": "string"},
+              "action": {"enum": ["持有", "减仓", "退出", "禁止加仓", "确认后可加仓"]}
+            }
+          }
+        },
+        "signals": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {"type": "string"},
+          "description": "明天三个关键观察信号，不多不少"
+        },
+        "discipline": {"type": "string", "description": "明天唯一纪律，一句话"}
+      }
+    },
+
+    "sections": {
+      "type": "object",
+      "description": "九大章节的成文内容（Markdown 片段），由上游产物改写而成",
+      "properties": {
+        "overview": {"type": "string"},
+        "index_review": {"type": "string"},
+        "sectors": {"type": "string"},
+        "positions": {"type": "string"},
+        "plan": {"type": "string"},
+        "news": {"type": "string"},
+        "risk": {"type": "string"}
+      }
+    },
+
     "provenance": {
       "type": "object",
-      "description": "从 dataset.json 透传，保证报告可追溯",
       "properties": {
+        "data_source": {"type": "string"},
         "adjust_mode": {"type": "string"},
-        "sources": {"type": "array", "items": {"type": "string"}},
+        "fetched_at": {"type": "string"},
         "quality_flags": {"type": "array", "items": {"type": "object"}}
       }
     },
     "disclaimer": {"type": "string"}
-  },
-  "$defs": {
-    "verdictCell": {
-      "type": "object",
-      "required": ["status", "verdict", "confidence"],
-      "properties": {
-        "status": {"$ref": "_common.defs.json#/$defs/status"},
-        "verdict": {"type": "string"},
-        "confidence": {"$ref": "_common.defs.json#/$defs/confidence"},
-        "one_liner": {"type": "string"}
-      }
-    }
   }
 }

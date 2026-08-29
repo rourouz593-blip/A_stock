@@ -2,7 +2,7 @@
 """用 schemas/ 下的 JSON Schema 校验某个 run 产物。
 
 用法:
-    python tools/validate_artifact.py --run-id 2026-01-02_example --artifact dataset
+    python tools/validate_artifact.py --run-id 2026-08-28_example --artifact dataset
 """
 from __future__ import annotations
 
@@ -13,9 +13,10 @@ from _common import SCHEMAS, build_validator, emit, fail, read_json, run_dir
 ARTIFACTS = {
     "run_manifest": "run_manifest.schema.json",
     "dataset": "dataset.schema.json",
-    "fundamental": "fundamental.schema.json",
-    "technical": "technical.schema.json",
-    "sentiment": "sentiment.schema.json",
+    "market": "market.schema.json",
+    "sectors": "sectors.schema.json",
+    "positions_review": "positions_review.schema.json",
+    "news": "news.schema.json",
     "report": "report.schema.json",
 }
 

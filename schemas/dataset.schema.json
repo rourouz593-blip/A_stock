@@ -2,25 +2,31 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "dataset.schema.json",
   "title": "数据集",
-  "description": "data-engineer 产出，本次 run 唯一的事实来源",
+  "description": "data-engineer 产出，本次 run 唯一的事实来源。所有分析 agent 只能引用这里的数字",
   "type": "object",
-  "required": ["run_id", "as_of", "targets", "adjust_mode", "blocks", "quality_flags"],
+  "required": ["run_id", "as_of", "mode", "adjust_mode", "data_source", "blocks", "quality_flags"],
   "properties": {
     "run_id": {"type": "string"},
-    "as_of": {"type": "string"},
-    "targets": {"type": "array", "items": {"type": "string"}},
-    "adjust_mode": {
-      "enum": ["qfq", "hfq", "none"],
-      "description": "复权口径：前复权/后复权/不复权。技术分析必读此字段"
-    },
-    "calendar": {"type": "string", "description": "使用的交易日历版本"},
+    "as_of": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "mode": {"enum": ["close", "premarket", "positions", "weekly"]},
+    "generated_at": {"type": "string"},
+    "adjust_mode": {"enum": ["qfq", "hfq", "none"]},
+    "data_source": {"type": "string"},
     "blocks": {
       "type": "object",
-      "description": "按数据类别分块，键为类别名",
       "propertyNames": {
-        "enum": ["ohlcv", "financials", "valuation", "industry", "announcements", "news", "moneyflow", "social"]
+        "enum": ["calendar", "index_spot", "index_intraday", "index_hist", "breadth",
+                 "limit_pool", "sectors", "sector_flow", "holdings", "news",
+                 "announcements", "northbound"]
       },
       "additionalProperties": {"$ref": "#/$defs/block"}
+    },
+    "derived": {
+      "type": "object",
+      "description": "由 scripts/clean/derive.py 算出的派生量，保证可复现",
+      "properties": {
+        "two_market_amount": {"type": ["object", "null"]}
+      }
     },
     "quality_flags": {
       "type": "array",
@@ -43,21 +49,17 @@
       "properties": {
         "status": {"enum": ["ok", "degraded", "missing"]},
         "rows": {"type": ["integer", "null"]},
-        "coverage": {
-          "type": ["object", "null"],
-          "properties": {"start": {"type": "string"}, "end": {"type": "string"}}
-        },
-        "path": {"type": ["string", "null"], "description": "大体量数据的落盘路径"},
-        "inline": {"description": "小体量数据可直接内联"},
+        "path": {"type": ["string", "null"], "description": "明细 CSV 路径"},
+        "inline": {"description": "小体量摘要，直接内联供 agent 读取"},
         "provenance": {
           "type": "object",
           "required": ["source", "fetched_at"],
           "properties": {
-            "source": {"type": "string", "description": "实际使用的数据源"},
-            "fallback_from": {"type": ["string", "null"], "description": "若降级换源，记录原源"},
+            "source": {"type": "string", "description": "如 akshare.stock_zt_pool_em"},
             "fetched_at": {"type": "string"},
-            "field_mapping": {"type": "object", "description": "原始字段 → 本项目字段"},
-            "unit": {"type": ["string", "null"], "description": "金额单位，如 CNY_yuan"}
+            "params": {"type": ["object", "null"]},
+            "unit": {"type": ["string", "null"]},
+            "fallback_from": {"type": ["string", "null"]}
           }
         }
       }

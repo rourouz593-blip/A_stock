@@ -22,7 +22,7 @@
 
 ```bash
 python tools/<tool_name>.py --help
-echo '{"run_id":"2026-01-02_example"}' | python tools/validate_artifact.py --artifact dataset
+python tools/validate_artifact.py --run-id 2026-08-28_example --artifact dataset
 ```
 
 所有工具在 `tool_manifest.yaml` 中登记。**没登记的工具，agent 不许调用。**
@@ -31,19 +31,21 @@ echo '{"run_id":"2026-01-02_example"}' | python tools/validate_artifact.py --art
 
 | 工具 | 状态 | 说明 |
 |---|---|---|
-| `init_run` | ✅ 可用 | 纯管道逻辑，已实现 |
-| `validate_artifact` | ✅ 可用 | 纯管道逻辑，已实现 |
-| `fetch_market_data` | ✅ 可用 | AKShare A 股日/周/月历史行情 |
-| `fetch_financials` | ⬜ 空壳 | 等数据源确定 |
-| `fetch_news` | ⏸️ 静默 | 等用户确认新闻 API，不调用 |
-| `clean_dataset` | ⬜ 空壳 | 等数据源确定 |
-| `compute_indicators` | ⬜ 空壳 | 等指标集合确定 |
-| `score_sentiment` | ⬜ 空壳 | 等打分口径确定 |
+| `init_run` | ✅ | 建 run 目录，按 mode 生成步骤列表 |
+| `fetch_dataset` | ✅ | AKShare 全量取数 → `dataset.json` + `data/<run_id>/*.csv` |
+| `compute_risk` | ✅ | 仓位、集中度、单笔风险、0.5% 线 |
+| `render_report` | ✅ | `report.json` → `report.md` + 单文件 HTML 仪表盘 |
+| `validate_artifact` | ✅ | 七种产物的 schema 校验 |
+| `make_demo_run` | ✅ | 生成全虚构示例 run，离线可跑 |
 
-"空壳"= CLI 骨架在、参数定义在、调用 `scripts/` 时抛 `NotImplementedError`。
+**全部已实现。** 需要你填的不是代码，是 `config/thresholds.yaml` 里的判定阈值。
 
-## 静态工具与动态数据
+## 快速自检
 
-工具本身应当稳定，例如 `fetch_market_data(codes, start, end, freq, adjust)`；变化的是
-每次调用产生的数据。工具把请求参数、抓取时间、实际来源和字段映射写进 provenance，
-因此同一个静态程序在不同时间返回不同数据，仍然可追溯、可复核。
+```bash
+python tools/make_demo_run.py                                   # 造一份示例 run
+python tools/render_report.py --run-id 2026-08-28_example       # 渲染
+open workspace/runs/2026-08-28_example/report.html              # 看效果
+```
+
+这条链路**完全不联网**，是验证仓库有没有装好的最快方式。

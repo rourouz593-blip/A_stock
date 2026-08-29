@@ -3,26 +3,53 @@ version: 1
 
 run:
   workspace_dir: workspace/runs
-  default_lookback_days: 250
-  # 三个分析 agent 是否并行。串行更好调试，并行更快
-  parallel_analysis: true
+  data_dir: data
+  # 三个分析 agent 里，sector 必须等 market（要用指数强弱做基准），
+  # news 可以和它们并行
+  parallel:
+    - [market-analyst]
+    - [sector-analyst, news-analyst]
+    - [position-advisor]
+    - [report-writer]
+
+# ── 章节九：四种运行模式 ────────────────────────────────────────
+modes:
+  close:                      # 交易日收盘后，全量九章
+    description: 收盘复盘
+    suggested_time: "15:30"
+    steps: [data-engineer, market-analyst, sector-analyst, news-analyst, position-advisor, report-writer]
+  premarket:                  # 次日盘前，用隔夜消息更新
+    description: 盘前更新
+    suggested_time: "08:45"
+    steps: [data-engineer, news-analyst, position-advisor, report-writer]
+    reuse_from_last_close: [market, sectors]
+  positions:                  # 用户改了 positions.yaml
+    description: 持仓更新
+    steps: [data-engineer, position-advisor, report-writer]
+    reuse_from_last_close: [market, sectors, news]
+  weekly:                     # 周末
+    description: 周复盘 + 下周三情景预案 + 本周纪律统计
+    suggested_time: "周六 10:00"
+    steps: [data-engineer, market-analyst, sector-analyst, position-advisor, report-writer]
 
 steps:
-  data-engineer:        {enabled: true,  required: true,  retry: 2, timeout_seconds: 600}
-  fundamental-analyst:  {enabled: true,  required: false, retry: 1, timeout_seconds: 600}
-  technical-analyst:    {enabled: true,  required: false, retry: 1, timeout_seconds: 300}
-  sentiment-analyst:    {enabled: true,  required: false, retry: 1, timeout_seconds: 600}
-  report-writer:        {enabled: true,  required: true,  retry: 1, timeout_seconds: 300}
-  # required: true 的步骤失败 → 整个 run 标 failed
-  # required: false 的步骤失败 → 标 blocked，流程继续，报告中必须声明缺口
+  data-engineer:     {enabled: true, required: true,  retry: 2, timeout_seconds: 900}
+  market-analyst:    {enabled: true, required: true,  retry: 1, timeout_seconds: 600}
+  sector-analyst:    {enabled: true, required: false, retry: 1, timeout_seconds: 600}
+  news-analyst:      {enabled: true, required: false, retry: 1, timeout_seconds: 600}
+  position-advisor:  {enabled: true, required: false, retry: 1, timeout_seconds: 600}
+  report-writer:     {enabled: true, required: true,  retry: 1, timeout_seconds: 600}
+  # required: true 失败 → 整个 run 标 failed
+  # required: false 失败 → 标 blocked，流程继续，报告开头必须声明缺口
 
 validation:
-  # 每步产出后强制用 schemas/ 校验，不通过则按 retry 重试
   validate_after_each_step: true
   fail_run_on_schema_error: true
 
 policy:
-  # 硬约束：这些开关不允许为了"跑通"而关掉
-  forbid_fabricated_data: true      # 数据缺失时必须 blocked，不得编造
-  require_evidence_for_claims: true # 每条结论必须有 evidence
-  forbid_trade_advice: true         # 禁止输出买卖建议、目标价、仓位
+  # 硬约束：不允许为了"跑通"而关掉
+  forbid_fabricated_data: true       # 数据缺失必须 blocked，不得编造
+  require_evidence_for_claims: true  # 每条结论必须引用 dataset 的具体字段
+  forbid_trade_advice: true          # 禁止目标价、具体买点、新标的推荐
+  forbid_run_on_non_trading_day: true # 非交易日不许出当日复盘
+  single_action_per_position: true   # 每只持仓只能有一个动作

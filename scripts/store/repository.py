@@ -1,30 +1,43 @@
-"""落盘与读取。TODO(datasource): 存储方案未确定，全部为空实现。
+"""落盘与读取。
 
-候选方案：本地 parquet 目录 / DuckDB 单文件 / SQLite。
-选型时考虑：学生本地能否零配置跑起来（这是本仓库的教学目标之一）。
+存储格式选 **CSV** 而不是 parquet：
+学生可以直接用 Excel / VSCode 打开看一眼数据长什么样，
+这比省那点磁盘空间重要得多。
 """
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
-from typing import Any
 
-from ..contracts import DataBlock
-
-
-def save_block(block_name: str, code: str, df: Any, base_dir: Path) -> str:
-    """落盘并返回相对路径。路径规范：data/<code>/<block_name>.parquet"""
-    raise NotImplementedError("TODO(datasource): 实现落盘")
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = Path(os.getenv("ASTOCK_DATA_DIR", REPO_ROOT / "data"))
 
 
-def load_block(path: str, base_dir: Path) -> Any:
-    """按路径读回。"""
-    raise NotImplementedError("TODO(datasource): 实现读取")
+def save_table(df, run_id: str, name: str) -> str:
+    """把一张表存成 CSV，返回相对仓库根目录的路径。"""
+    out = DATA_DIR / run_id / f"{name}.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out, index=False, encoding="utf-8-sig")  # utf-8-sig 让 Excel 不乱码
+    try:
+        return str(out.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(out)
 
 
-def build_dataset_json(run_id: str, as_of: str, blocks: dict[str, DataBlock]) -> dict:
-    """把各个 DataBlock 组装成符合 schemas/dataset.schema.json 的字典。
+def load_table(path: str):
+    import pandas as pd
 
-    这是 data-engineer 的最终交付物。实现后务必用
-    `python tools/validate_artifact.py --run-id <id> --artifact dataset` 校验。
-    """
-    raise NotImplementedError("TODO(datasource): 实现 dataset.json 组装")
+    p = Path(path)
+    if not p.is_absolute():
+        p = REPO_ROOT / p
+    return pd.read_csv(p, dtype={"代码": str, "板块代码": str})
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(Path(path).read_text(encoding="utf-8"))

@@ -1,0 +1,316 @@
+{
+  "run_id": "2026-08-28_example",
+  "as_of": "2026-08-28",
+  "mode": "close",
+  "generated_at": "2026-08-28T15:42:00+08:00",
+  "adjust_mode": "qfq",
+  "data_source": "akshare",
+  "blocks": {
+    "calendar": {
+      "status": "ok",
+      "rows": 6000,
+      "inline": {
+        "as_of": "2026-08-28",
+        "is_trading_day": true,
+        "last_trading_day": "2026-08-28",
+        "prev_trading_day": "2026-08-27"
+      },
+      "provenance": {
+        "source": "akshare.tool_trade_date_hist_sina",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {},
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "index_spot": {
+      "status": "ok",
+      "rows": 4,
+      "inline": [
+        {
+          "code": "000001",
+          "name": "上证指数",
+          "date": "2026-08-28",
+          "open": 3412.55,
+          "close": 3438.21,
+          "high": 3444.9,
+          "low": 3405.12,
+          "pct_chg": 0.74,
+          "amplitude": 1.17,
+          "amount": 562000000000.0,
+          "prev_close": 3412.98,
+          "amount_chg_pct": 8.4
+        },
+        {
+          "code": "399001",
+          "name": "深证成指",
+          "date": "2026-08-28",
+          "open": 10820.4,
+          "close": 10902.6,
+          "high": 10930.1,
+          "low": 10788.3,
+          "pct_chg": 0.62,
+          "amplitude": 1.31,
+          "amount": 694000000000.0,
+          "prev_close": 10835.4,
+          "amount_chg_pct": 6.1
+        },
+        {
+          "code": "399006",
+          "name": "创业板指",
+          "date": "2026-08-28",
+          "open": 2158.9,
+          "close": 2131.7,
+          "high": 2166.2,
+          "low": 2126.4,
+          "pct_chg": -1.28,
+          "amplitude": 1.84,
+          "amount": 301000000000.0,
+          "prev_close": 2159.3,
+          "amount_chg_pct": 3.2
+        },
+        {
+          "code": "000688",
+          "name": "科创50",
+          "date": "2026-08-28",
+          "open": 1042.3,
+          "close": 1028.8,
+          "high": 1046.7,
+          "low": 1025.1,
+          "pct_chg": -1.44,
+          "amplitude": 2.07,
+          "amount": 58000000000.0,
+          "prev_close": 1043.8,
+          "amount_chg_pct": -2.6
+        }
+      ],
+      "provenance": {
+        "source": "akshare.index_zh_a_hist",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {
+          "period": "daily"
+        },
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "index_hist": {
+      "status": "ok",
+      "rows": 240,
+      "path": "data/2026-08-28_example/index_hist.csv",
+      "provenance": {
+        "source": "akshare.index_zh_a_hist",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {
+          "period": "daily"
+        },
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "index_intraday": {
+      "status": "ok",
+      "rows": 964,
+      "path": "data/2026-08-28_example/index_intraday.csv",
+      "provenance": {
+        "source": "akshare.index_zh_a_hist_min_em",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {
+          "period": "1"
+        },
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "breadth": {
+      "status": "ok",
+      "rows": 143,
+      "inline": {
+        "as_of": "2026-08-28",
+        "advance_decline": {
+          "up": 3104,
+          "down": 1892,
+          "flat": 121,
+          "limit_up_legu": 68,
+          "limit_down_legu": 9,
+          "suspended": 14
+        },
+        "limit_stats": {
+          "limit_up": 68,
+          "broken_board": 31,
+          "limit_down": 9,
+          "prev_limit_up": 55
+        },
+        "broken_board_rate": 31.3,
+        "promotion_rate": 34.5,
+        "highest_board": 5,
+        "ladder": {
+          "1板": 41,
+          "2板": 15,
+          "3板": 8,
+          "4板": 3,
+          "5板": 1
+        }
+      },
+      "provenance": {
+        "source": "akshare.stock_market_activity_legu + stock_zt_pool_*",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {},
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "limit_pool": {
+      "status": "ok",
+      "rows": 163,
+      "path": "data/2026-08-28_example/pool_*.csv",
+      "provenance": {
+        "source": "akshare.stock_zt_pool_em",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {},
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "sectors": {
+      "status": "ok",
+      "rows": 480,
+      "path": "data/2026-08-28_example/sector_*.csv",
+      "provenance": {
+        "source": "akshare.stock_board_industry_name_em",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {},
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "sector_flow": {
+      "status": "ok",
+      "rows": 40,
+      "path": "data/2026-08-28_example/sector_flow.csv",
+      "provenance": {
+        "source": "akshare.stock_sector_fund_flow_rank",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {
+          "indicator": "今日"
+        },
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "holdings": {
+      "status": "ok",
+      "rows": 180,
+      "inline": [
+        {
+          "code": "999001.SZ",
+          "date": "2026-08-28",
+          "open": 13.9,
+          "close": 14.62,
+          "high": 14.71,
+          "low": 13.85,
+          "pct_chg": 5.1,
+          "amplitude": 6.2,
+          "turnover_rate": 18.4,
+          "amount": 910000000.0,
+          "ma5": 13.42,
+          "ma10": 12.88,
+          "ma20": 12.1,
+          "high_20d": 14.71,
+          "low_20d": 11.2,
+          "vol_ratio_5d": 1.62,
+          "stale": false
+        },
+        {
+          "code": "999002.SH",
+          "date": "2026-08-28",
+          "open": 25.1,
+          "close": 24.18,
+          "high": 25.22,
+          "low": 24.02,
+          "pct_chg": -3.75,
+          "amplitude": 4.8,
+          "turnover_rate": 6.1,
+          "amount": 340000000.0,
+          "ma5": 25.02,
+          "ma10": 25.44,
+          "ma20": 24.9,
+          "high_20d": 27.3,
+          "low_20d": 23.1,
+          "vol_ratio_5d": 0.74,
+          "stale": false
+        }
+      ],
+      "provenance": {
+        "source": "akshare.stock_zh_a_hist",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {
+          "adjust": "qfq"
+        },
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "news": {
+      "status": "ok",
+      "rows": 118,
+      "path": "data/2026-08-28_example/news.csv",
+      "provenance": {
+        "source": "akshare.stock_info_global_cls",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {},
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "announcements": {
+      "status": "ok",
+      "rows": 421,
+      "path": "data/2026-08-28_example/announcements.csv",
+      "provenance": {
+        "source": "akshare.stock_notice_report",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {
+          "date": "2026-08-28"
+        },
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    },
+    "northbound": {
+      "status": "missing",
+      "rows": 0,
+      "provenance": {
+        "source": "akshare.stock_hsgt_fund_flow_summary_em",
+        "fetched_at": "2026-08-28T15:42:00+08:00",
+        "params": {},
+        "unit": "CNY_yuan",
+        "fallback_from": null
+      }
+    }
+  },
+  "derived": {
+    "two_market_amount": {
+      "total": 1256000000000.0,
+      "total_yi": 12560.0,
+      "prev_total_yi": 11640.0,
+      "chg_yi": 920.0,
+      "chg_pct": 7.9,
+      "note": "上证 + 深证成指市场成交额之和；创业板/科创板已含其中，未重复计入"
+    }
+  },
+  "quality_flags": [
+    {
+      "block": "index_intraday",
+      "level": "info",
+      "message": "分时接口首次超时，重试后取到完整数据",
+      "affected_range": null
+    },
+    {
+      "block": "northbound",
+      "level": "info",
+      "message": "北向资金接口无数据（沪深港通披露规则已调整），本块为可选，不阻塞分析",
+      "affected_range": null
+    }
+  ]
+}

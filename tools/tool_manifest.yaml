@@ -5,72 +5,60 @@ tools:
   - name: init_run
     entry: tools/init_run.py
     status: implemented
-    description: 创建一次分析运行的 workspace 目录并写入初始 run_manifest.json
+    description: 创建一次复盘运行的 workspace 目录，按运行模式写入初始 run_manifest.json
     allowed_agents: [orchestrator]
     input:
-      targets: "list[str]  股票代码，形如 600519.SH"
-      as_of: "str  分析基准日 YYYY-MM-DD"
-      slug: "str  run 目录后缀，可选"
-    output:
+      as_of: "str  YYYY-MM-DD"
+      mode: "str  close | premarket | positions | weekly"
+      slug: "str  可选，run 目录后缀，默认用 mode"
+    output: {run_id: str, run_dir: str, mode: str, steps: "list[str]"}
+
+  - name: fetch_dataset
+    entry: tools/fetch_dataset.py
+    status: implemented
+    description: 用 AKShare 取当日全部数据并写出 dataset.json（scripts/build_dataset.py 的薄封装）
+    allowed_agents: [data-engineer]
+    input:
       run_id: str
-      run_dir: str
+      as_of: str
+      no_cache: "bool  忽略本地缓存强制重取"
+    output: {ok: bool, artifact: str, detail_csv_dir: str}
+
+  - name: compute_risk
+    entry: tools/compute_risk.py
+    status: implemented
+    description: 计算总仓位、单票与同题材集中度、单笔风险与 0.5% 线（章节七）
+    allowed_agents: [position-advisor]
+    input: {run_id: str}
+    output:
+      account_equity: float
+      total_position_pct: float
+      concentration: "list[dict]"
+      per_trade_risk: "list[dict]"
+
+  - name: render_report
+    entry: tools/render_report.py
+    status: implemented
+    description: 把 report.json 渲染成 report.md 与单文件 HTML 仪表盘
+    allowed_agents: [report-writer]
+    input: {run_id: str}
+    output: {ok: bool, md: str, html: str}
 
   - name: validate_artifact
     entry: tools/validate_artifact.py
     status: implemented
-    description: 用 schemas/ 下的 JSON Schema 校验某个 run 产物是否合规
-    allowed_agents: [orchestrator, data-engineer, fundamental-analyst, technical-analyst, sentiment-analyst, report-writer]
+    description: 用 schemas/ 校验某个 run 产物是否合规
+    allowed_agents: [orchestrator, data-engineer, market-analyst, sector-analyst,
+                     news-analyst, position-advisor, report-writer]
     input:
       run_id: str
-      artifact: "str  run_manifest | dataset | fundamental | technical | sentiment | report"
-    output:
-      valid: bool
-      errors: "list[str]"
+      artifact: "run_manifest | dataset | market | sectors | positions_review | news | report"
+    output: {valid: bool, errors: "list[str]"}
 
-  - name: fetch_market_data
-    entry: tools/fetch_market_data.py
+  - name: make_demo_run
+    entry: tools/make_demo_run.py
     status: implemented
-    description: 通过 AKShare 拉取 A 股历史行情；日线东财失败时显式降级到腾讯
-    allowed_agents: [data-engineer]
-    input: {codes: "list[str]", start: str, end: str, freq: str, adjust: str, params_file: "str 可选，Windows 友好的 JSON 请求文件"}
-    output: {status: str, path: str, rows: int, coverage: dict, provenance: dict, quality_flags: "list[dict]"}
-
-  - name: fetch_financials
-    entry: tools/fetch_financials.py
-    status: stub          # TODO(datasource)
-    description: 拉取三大报表与估值指标
-    allowed_agents: [data-engineer]
-    input: {codes: "list[str]", periods: "list[str]", statements: "list[str]"}
-    output: {path: str, rows: int, provenance: dict}
-
-  - name: fetch_news
-    entry: tools/fetch_news.py
-    status: stub          # 有意保持静默，等待用户确认新闻 API
-    description: 拉取公告、新闻与舆情
-    allowed_agents: [data-engineer]
-    input: {codes: "list[str]", start: str, end: str, sources: "list[str]"}
-    output: {path: str, rows: int, provenance: dict}
-
-  - name: clean_dataset
-    entry: tools/clean_dataset.py
-    status: stub          # TODO(datasource)
-    description: 交易日历对齐、复权口径统一、单位归一、质量标记
-    allowed_agents: [data-engineer]
-    input: {run_id: str}
-    output: {path: str, quality_flags: "list[dict]"}
-
-  - name: compute_indicators
-    entry: tools/compute_indicators.py
-    status: stub          # TODO(strategy)
-    description: 按白名单计算技术指标
-    allowed_agents: [technical-analyst]
-    input: {run_id: str, indicators: "list[str]"}
-    output: {indicators: "list[dict]"}
-
-  - name: score_sentiment
-    entry: tools/score_sentiment.py
-    status: stub          # TODO(strategy)
-    description: 按信源权重与时间衰减计算情绪分与热度分
-    allowed_agents: [sentiment-analyst]
-    input: {run_id: str}
-    output: {sentiment_score: float, attention_score: float, events: "list[dict]"}
+    description: 生成一份全虚构的示例 run，用于离线演示与教学（不联网）
+    allowed_agents: []          # 只给人用，agent 不应调用
+    input: {run_id: str, as_of: str}
+    output: {ok: bool, run_dir: str, files: "list[str]"}

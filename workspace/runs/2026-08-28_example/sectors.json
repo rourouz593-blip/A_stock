@@ -1,0 +1,262 @@
+{
+  "run_id": "2026-08-28_example",
+  "as_of": "2026-08-28",
+  "status": "ok",
+  "blocked_reason": null,
+  "directions": [
+    {
+      "role": "今日主线",
+      "name": "示例固态电池",
+      "phase": "发酵",
+      "pct_chg": 4.62,
+      "limit_up_count": 9,
+      "net_inflow_yi": 23.4,
+      "members": {
+        "leader": {
+          "code": "999001.SZ",
+          "name": "示例科技",
+          "boards": 3,
+          "pct_chg": 5.1,
+          "note": "3 板，全天封板未开"
+        },
+        "core": {
+          "code": "999010.SH",
+          "name": "示例电新",
+          "boards": null,
+          "pct_chg": 3.2,
+          "note": "市值 480 亿，容量票"
+        },
+        "elastic": [
+          {
+            "code": "999011.SZ",
+            "name": "示例锂材",
+            "boards": 2,
+            "pct_chg": 10.0,
+            "note": null
+          }
+        ],
+        "front": [
+          {
+            "code": "999012.SZ",
+            "name": "示例隔膜",
+            "boards": 1,
+            "pct_chg": 10.0,
+            "note": null
+          },
+          {
+            "code": "999013.SZ",
+            "name": "示例电解液",
+            "boards": 1,
+            "pct_chg": 10.0,
+            "note": null
+          }
+        ],
+        "back": [
+          {
+            "code": "999014.SZ",
+            "name": "示例设备",
+            "boards": null,
+            "pct_chg": 4.1,
+            "note": null
+          }
+        ]
+      },
+      "strength_basis": {
+        "linkage": "板块内 9 只涨停、涨幅>5% 的 17 只，不是单票行为",
+        "leadership": "龙头 9:48 封板后，30 分钟内 4 只跟风涨停，带动性强",
+        "capacity": "有 480 亿市值的示例电新参与，机构资金进得来",
+        "ladder": "1板5 / 2板3 / 3板1，梯队连续无断层",
+        "vs_index": "板块 +4.62%，创业板 -1.28%，超额 5.9 个百分点，逆指数走强"
+      },
+      "verify_tomorrow": {
+        "watch": [
+          "龙头示例科技竞价开盘价",
+          "10:00 前板块内第二只涨停是否出现",
+          "示例电新（中军）是否跟涨"
+        ],
+        "continuation": "示例科技竞价不低开超 3%，且 10:00 前板块出现第二只涨停",
+        "failure": "示例科技低开破 5 日线 13.42 且 30 分钟内不收回，视为方向失败"
+      },
+      "evidence": [
+        {
+          "block": "sectors",
+          "field": "涨跌幅",
+          "value": 4.62,
+          "period": "2026-08-28"
+        }
+      ]
+    },
+    {
+      "role": "次主线",
+      "name": "示例电力",
+      "phase": "启动",
+      "pct_chg": 2.15,
+      "limit_up_count": 3,
+      "net_inflow_yi": 11.8,
+      "members": {
+        "leader": {
+          "code": "999020.SH",
+          "name": "示例电投",
+          "boards": 1,
+          "pct_chg": 10.0,
+          "note": null
+        },
+        "core": {
+          "code": "999021.SH",
+          "name": "示例长电",
+          "boards": null,
+          "pct_chg": 1.8,
+          "note": null
+        },
+        "elastic": [],
+        "front": [
+          {
+            "code": "999022.SH",
+            "name": "示例皖能",
+            "boards": 1,
+            "pct_chg": 10.0,
+            "note": null
+          }
+        ],
+        "back": []
+      },
+      "strength_basis": {
+        "linkage": "3 只涨停但涨幅>5% 仅 5 只，联动度一般",
+        "leadership": "龙头首板，尚无接力样本",
+        "capacity": "有超千亿市值的示例长电，容量充足",
+        "ladder": "全是首板，无梯队",
+        "vs_index": "板块 +2.15%，上证 +0.74%，超额 1.4 个点"
+      },
+      "verify_tomorrow": {
+        "watch": [
+          "示例电投能否连板"
+        ],
+        "continuation": "示例电投连板且板块再出 2 只涨停",
+        "failure": "示例电投低开翻绿，视为一日游"
+      }
+    },
+    {
+      "role": "指数共振",
+      "name": "示例金融",
+      "phase": "回流",
+      "pct_chg": 1.84,
+      "limit_up_count": 0,
+      "net_inflow_yi": 41.2,
+      "members": {
+        "leader": null,
+        "core": {
+          "code": "999030.SH",
+          "name": "示例银行",
+          "boards": null,
+          "pct_chg": 2.1,
+          "note": null
+        },
+        "elastic": [],
+        "front": [],
+        "back": []
+      },
+      "strength_basis": {
+        "linkage": "普涨但无涨停，是资金避险回流而非题材行情",
+        "leadership": "无龙头，权重齐涨",
+        "capacity": "全是大市值",
+        "ladder": "无梯队",
+        "vs_index": "拉动上证约 0.4 个点，是今日指数上涨的主要来源"
+      },
+      "verify_tomorrow": {
+        "watch": [
+          "主力净流入是否连续第 3 日为正"
+        ],
+        "continuation": "继续净流入且题材未起，说明资金仍在避险",
+        "failure": "净流出转负，说明资金回流题材"
+      }
+    },
+    {
+      "role": "逆指数抱团",
+      "name": "示例固态电池",
+      "phase": "发酵",
+      "pct_chg": 4.62,
+      "limit_up_count": 9,
+      "net_inflow_yi": 23.4,
+      "members": {
+        "leader": {
+          "code": "999001.SZ",
+          "name": "示例科技",
+          "boards": 3,
+          "pct_chg": 5.1,
+          "note": null
+        },
+        "core": null,
+        "elastic": [],
+        "front": [],
+        "back": []
+      },
+      "strength_basis": {
+        "vs_index": "创业板 -1.28% 而板块 +4.62%，是今日唯一有独立资金的方向"
+      },
+      "verify_tomorrow": {
+        "watch": [
+          "与主线同一板块，验证条件同上"
+        ],
+        "continuation": "同今日主线",
+        "failure": "同今日主线"
+      }
+    },
+    {
+      "role": "退潮风险",
+      "name": "示例算力",
+      "phase": "退潮",
+      "pct_chg": -5.31,
+      "limit_up_count": 1,
+      "net_inflow_yi": -38.6,
+      "members": {
+        "leader": {
+          "code": "999002.SH",
+          "name": "示例材料",
+          "boards": null,
+          "pct_chg": -3.75,
+          "note": "昨日 4 板，今日断板"
+        },
+        "core": null,
+        "elastic": [],
+        "front": [
+          {
+            "code": "999040.SZ",
+            "name": "示例光模块",
+            "boards": null,
+            "pct_chg": -8.2,
+            "note": null
+          }
+        ],
+        "back": [
+          {
+            "code": "999041.SZ",
+            "name": "示例服务器",
+            "boards": null,
+            "pct_chg": -10.0,
+            "note": "跌停"
+          }
+        ]
+      },
+      "strength_basis": {
+        "linkage": "板块内 6 只昨日涨停股今日全部低开，2 只跌停",
+        "leadership": "前龙头断板，无人接力",
+        "capacity": "容量票率先出货",
+        "ladder": "梯队断裂，昨日 4 板今日无 5 板",
+        "vs_index": "板块 -5.31%，创业板 -1.28%，跑输 4 个百分点"
+      },
+      "verify_tomorrow": {
+        "watch": [
+          "前龙头示例材料能否止跌",
+          "板块炸板率"
+        ],
+        "continuation": "（对退潮而言）继续下跌属正常演绎",
+        "failure": "若明日板块内出现 3 只以上涨停且龙头反包，则退潮判断被证伪"
+      }
+    }
+  ],
+  "confidence": "medium",
+  "caveats": [
+    "本文件为教学示例，全部板块与个股均为虚构",
+    "示例固态电池同时被标记为“今日主线”与“逆指数抱团”——这是合理的：一个方向可以同时满足两个角色，报告中会合并说明"
+  ]
+}
