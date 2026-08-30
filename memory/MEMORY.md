@@ -16,6 +16,6 @@
 ## 运行记录（runs/）
 
 <!-- orchestrator 每次 run 结束后在此追加一行：
-- 2026-08-28_close | 分歧 | 持仓 2 只 | 行为自检触发 2 条 | runs/2026-08-28_close.json
+- <YYYY-MM-DD>_close | <一句话定性> | [记录](runs/<YYYY-MM-DD>_close.json)
 -->
 - 2026-08-28_example | 示例（虚构数据） | 分歧 | 行为自检触发 2 条 | [记录](runs/2026-08-28_example.json)

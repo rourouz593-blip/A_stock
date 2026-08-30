@@ -10,10 +10,13 @@
 
 ```bash
 # 五秒钟看到最终产出长什么样（不联网）
-python tools/make_demo_run.py
-python tools/render_report.py --run-id 2026-08-28_example
+python tools/astock.py demo
 open workspace/runs/2026-08-28_example/report.html
 ```
+
+对着任何 coding agent（Claude Code / opencode / Codex / Cursor）说一句
+「**帮我做今日股市复盘**」，它读完 `AGENTS.md` 就知道该跑什么——
+这是本项目的另一半目标：做一个**零背景可接手**的 harness。
 
 ---
 
@@ -25,6 +28,7 @@ open workspace/runs/2026-08-28_example/report.html
 - [四、目录结构](#四目录结构)
 - [五、数据层：AKShare 取回来的十二个块](#五数据层akshare-取回来的十二个块)
 - [六、快速开始](#六快速开始)
+- [六点五、任何 coding agent 怎么接手](#六点五任何-coding-agent-怎么接手)
 - [七、四种运行方式](#七四种运行方式)
 - [八、设计原则与硬约束](#八设计原则与硬约束)
 - [九、当前留白：需要你填的阈值](#九当前留白需要你填的阈值)
@@ -178,15 +182,21 @@ Skill 让 agent"知道怎么做"，Tool 让 agent"真的能做"。
 - "炸板率是多少" → **Tool**（模型口算的数字每次都不一样，报告就不可复现了）
 - "这个炸板率说明情绪到哪一步了" → **Prompt**（需要判断）
 
-六个工具都是独立 CLI、JSON 进 JSON 出，因此任何 harness 都能调用：
+八个工具都是独立 CLI，因此任何 harness 都能调用。
+其中 **`astock` 是统一入口**，它把其余几个串成一条带状态的流水线：
 
 ```bash
-python tools/init_run.py --as-of 2026-08-28 --mode close
-python tools/fetch_dataset.py --run-id 2026-08-28_close --as-of 2026-08-28
-python tools/compute_risk.py --run-id 2026-08-28_close
-python tools/render_report.py --run-id 2026-08-28_close
-python tools/validate_artifact.py --run-id 2026-08-28_close --artifact report
-python tools/make_demo_run.py                       # 离线示例
+python tools/astock.py doctor | review | next | done <agent> | status | demo
+```
+
+底层工具（一般不用直接调）：
+
+```bash
+python tools/fetch_dataset.py     --run-id ... --as-of ...    # AKShare 取数
+python tools/compute_risk.py      --run-id ...                # 仓位与单笔风险
+python tools/render_report.py     --run-id ...                # md + html
+python tools/validate_artifact.py --run-id ... --artifact ... # schema 校验
+python tools/sync_harness.py                                  # 生成 harness 适配层
 ```
 
 ### ④ Contract 契约（`schemas/`）
@@ -225,9 +235,13 @@ Agent 之间传消息的"信箱"。用文件而不是内存，换来四件事：
 
 ```
 A-stock/
-├── AGENTS.md                    ★ 任何 coding agent 进来读的第一份文件
+├── AGENTS.md                    ★ 任何 coding agent 进来读的第一份文件（第 0 节是意图路由表）
 ├── README.md                    ★ 你正在读的这份（面向人）
-├── CLAUDE.md / .claude/         Claude Code 入口指针与适配说明
+├── CLAUDE.md                    Claude Code 入口指针 → AGENTS.md
+├── Makefile                     给人用的快捷方式：make doctor / review / demo / test
+│
+├── .claude/ .opencode/          ← 各 harness 的适配层，**全部由 sync_harness.py 生成**
+├── .cursor/  .codex/               里面只有路由信息和指针，不放内容
 │
 ├── agents/                      ① 七个角色定义
 │   ├── orchestrator.md              总控 + 四种运行模式
@@ -239,7 +253,14 @@ A-stock/
 │   └── report-writer.md             章节⑤⑧ + 成文
 │
 ├── skills/                      ② 八个技能包
-├── tools/                       ③ 六个 CLI 工具（全部已实现）
+├── tools/                       ③ 八个 CLI 工具（全部已实现）
+│   ├── astock.py                    ★ 统一入口与流程状态机（agent 只需记这一个）
+│   ├── sync_harness.py              生成各 harness 的适配层
+│   ├── fetch_dataset.py             AKShare 取数
+│   ├── compute_risk.py              仓位与单笔风险
+│   ├── render_report.py             report.json → md + html 仪表盘
+│   ├── validate_artifact.py         schema 校验
+│   ├── init_run.py / make_demo_run.py
 ├── schemas/                     ④ 七份 JSON Schema
 ├── memory/                      ⑤ 知识 / ADR / 运行流水
 ├── workspace/runs/              ⑥ 运行产物
@@ -306,16 +327,32 @@ git clone <repo> && cd A-stock
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
+# 或者一条 make setup 全做了
 cp config/positions.example.yaml  config/positions.yaml   # 填你的持仓
 cp config/thresholds.example.yaml config/thresholds.yaml  # 填判定阈值
 cp .env.example .env                                      # 填 ASTOCK_ACCOUNT_EQUITY
 ```
 
-### 先看示例（不联网，五秒钟）
+### 三份配置，什么时候需要
+
+| 文件 | 不配会怎样 | 什么时候必须配 |
+|---|---|---|
+| `config/positions.yaml` | 章节④⑦为空，**①②③⑥⑤⑧ 照常出** | 想看持仓分析与风险纪律时 |
+| `.env` 的 `ASTOCK_ACCOUNT_EQUITY` | 风险章节只能给**比例**，给不出**金额**（不许拿持仓市值当账户规模估算） | 想看"跌到失效位亏多少钱""是否超 0.5%"时 |
+| `config/thresholds.yaml` | 自动回退到 `thresholds.example.yaml`，阈值全是 `null`，判断由模型自己拿捏 | 想让情绪阶段与板块强弱的判定**可复现**时 |
+
+**三份都不配也能跑通全流程**——但那份报告只有"市场层"是完整的。
+先跑一次 `python tools/astock.py demo` 看产出，再决定要不要配，是更省事的顺序。
+
+`.env` 会被**自动加载**（`scripts/env.py`，纯标准库），不需要 `source .env`。
+真实环境变量优先于 `.env`，所以 CI 里可以直接用环境变量覆盖。
+
+
+### 先自检 + 看示例（不联网）
 
 ```bash
-python tools/make_demo_run.py
-python tools/render_report.py --run-id 2026-08-28_example
+python tools/astock.py doctor    # 依赖、配置、网络逐项检查，缺什么直接告诉你怎么修
+python tools/astock.py demo      # 生成全虚构示例并渲染
 open workspace/runs/2026-08-28_example/report.html
 ```
 
@@ -328,22 +365,98 @@ open workspace/runs/2026-08-28_example/report.html
 ### 跑真实数据
 
 ```bash
-python tools/init_run.py --as-of 2026-08-28 --mode close
-python tools/fetch_dataset.py --run-id 2026-08-28_close --as-of 2026-08-28
-python tools/validate_artifact.py --run-id 2026-08-28_close --artifact dataset
+python tools/astock.py review          # 日期自动推断（收盘后算今天，否则算上一个工作日）
+python tools/astock.py review --as-of 2026-08-26 --mode close   # 指定
 ```
 
-然后把仓库交给任何 coding agent，一句话即可：
+然后按 `next` / `done` 的循环走完。或者直接把仓库交给任何 coding agent，一句话：
 
-> 读 `AGENTS.md`，跑 2026-08-28 的收盘复盘
+> 帮我做今日股市复盘
+
+也可以用 `make`：`make doctor` / `make review` / `make next` / `make demo` / `make test`。
 
 ### 跑测试
 
 ```bash
-pytest tests/ -q      # 25 项，全部 mock，不访问网络
+pytest tests/ -q      # 33 项，全部 mock，不访问网络
 ```
 
 ---
+
+## 六点五、任何 coding agent 怎么接手
+
+### 一句话就能启动
+
+用户说「帮我做今日股市复盘」，agent 读 `AGENTS.md` 第 0 节的意图路由表，
+就知道该跑 `python tools/astock.py review`。
+
+`AGENTS.md` 被 Codex、opencode 自动读取；Claude Code 走 `CLAUDE.md` 指过去；
+Cursor 有一条 `alwaysApply` 的常驻规则。四家都能收到同一句指令。
+
+### 唯一需要记住的循环
+
+```bash
+python tools/astock.py doctor     # 首次：依赖、配置、网络逐项自检
+python tools/astock.py review     # 开始：建 run + AKShare 取数
+python tools/astock.py next       # ← 我现在该做什么
+#     照着它说的做，写出那一份产物
+python tools/astock.py done <agent>   # 校验产物，通过则自动打印下一步
+#     回到 next，直到「全部完成」
+```
+
+`next` 的输出长这样：
+
+```
+┌─ 第 2/6 步 · market-analyst（市场分析师）
+│  run 2026-08-28_close · 分析日 2026-08-28 · 模式 close
+│
+│  ①  先读角色定义
+│     agents/market-analyst.md   ← 职责、工作步骤、边界与禁止事项都在里面
+│
+│  ②  加载技能（方法论在这里，不要自己发明判断标准）
+│     skills/market-emotion-cycle/SKILL.md
+│     skills/intraday-rhythm/SKILL.md
+│     skills/a-share-market-basics/SKILL.md
+│
+│  ③  只读这些输入（多一个都不许读）
+│     ✓ workspace/runs/2026-08-28_close/dataset.json
+│
+│  ④  只写这个产物
+│     workspace/runs/2026-08-28_close/market.json
+│     结构见 schemas/market.schema.json
+│     照着抄 workspace/runs/2026-08-28_example/market.json（虚构示例，字段齐全）
+│
+│  ⑤  写完自检并推进
+│     python tools/astock.py done market-analyst --run-id 2026-08-28_close
+│
+│  纪律：数据缺了就写 blocked + 原因，不许编；
+│        每条结论都要能追溯到 dataset.json 的具体字段。
+└─
+```
+
+产物没通过 schema 校验时，`done` 会把具体哪个字段不对打出来，并指向示例文件——
+agent 改完再跑一次即可。
+
+### 为什么要做成状态机
+
+**流程状态存在 `run_manifest.json` 里，不在 agent 的上下文里。**
+
+所以：上下文被截断了不影响、换一个 agent 接手能续上、今天跑一半明天继续也能续上。
+每一步都重新问一次"我在哪、下一步是什么"，比让 agent 记住六步流程可靠得多。
+
+### 多 harness 适配是生成的
+
+```
+agents/*.md + AGENTS.md          ← 唯一事实来源
+        ↓ tools/sync_harness.py
+.claude/  .opencode/  .cursor/  .codex/    ← 薄适配层，全部生成，不要手改
+```
+
+适配文件里**不放内容**，只放路由信息和一个指针（"完整定义在 agents/xxx.md"）。
+加一个新 harness 只需在 `sync_harness.py` 里加十行。
+`tests/test_harness.py` 会检查两边同步，有人手改生成物就报错。
+
+详见 [`docs/06-harness适配.md`](docs/06-harness适配.md)。
 
 ## 七、四种运行方式
 
@@ -416,6 +529,8 @@ grep -rn "TODO(strategy)" --include="*.md" --include="*.yaml" .
 | 7 | 新增 `moneyflow-analyst`（资金流分析师），走完 `docs/03` 的六步 | 全链路 | ★★★ |
 | 8 | 加入交易流水 `trades.yaml`，让"卖强留弱""亏损补仓""卖飞追回"三条自检自动化 | 全链路 | ★★★★ |
 | 9 | 连续两周做 `news.json` 的次日验证，统计你的解读准确率 | 系统性反思 | ★★★★ |
+| 10 | 让 opencode 或 Codex 零背景接手跑一次完整复盘，把卡住的地方补进 `AGENTS.md` | harness 设计 | ★★★ |
+| 11 | 给 `sync_harness.py` 加一个新 harness（如 Windsurf），跑通 `--check` | harness 设计 | ★★ |
 
 第 9 题没有代码量，但它是这个系统里**唯一能真正提高你水平**的一题。
 

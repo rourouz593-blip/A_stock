@@ -2,6 +2,36 @@
 version: 1
 
 tools:
+  - name: astock
+    entry: tools/astock.py
+    status: implemented
+    description: |
+      统一入口与流程状态机。任何 coding agent 只需要记住这一个命令。
+      doctor 环境自检 / review 开工 / next 我该做什么 / done 校验并推进 / status 进度 / demo 离线示例。
+      next 会读 run_manifest 的状态与 agents/*.md 的 frontmatter，
+      把"下一步该做什么"渲染成可执行指令——所以 agent 不需要记流程。
+    allowed_agents: [orchestrator, data-engineer, market-analyst, sector-analyst,
+                     news-analyst, position-advisor, report-writer]
+    input:
+      cmd: "doctor | review | next | done | status | demo"
+      run_id: "str  可选，默认取最近一个 run"
+      as_of: "str  可选，默认按当前时间推断"
+      mode: "str  close | premarket | positions | weekly"
+    output:
+      next_agent: str
+      reads: "list[str]"
+      writes: "list[str]"
+      schema: str
+      finish_command: str
+
+  - name: sync_harness
+    entry: tools/sync_harness.py
+    status: implemented
+    description: 从 agents/ 与 AGENTS.md 生成 .claude / .opencode / .cursor / .codex 的适配文件
+    allowed_agents: []          # 维护用，不在复盘流程里调
+    input: {check: "bool  只检查是否同步"}
+    output: {generated: int, drift: "list[str]"}
+
   - name: init_run
     entry: tools/init_run.py
     status: implemented

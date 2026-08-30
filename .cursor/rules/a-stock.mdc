@@ -1,0 +1,16 @@
+---
+description: A 股每日复盘流水线的使用方式
+alwaysApply: true
+---
+
+<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agents/ 或 AGENTS.md 后重新生成 -->
+
+本仓库是一条 A 股每日复盘流水线。用户说「复盘 / 今天大盘 / 看看我的持仓」时，
+**不要自己查行情或凭印象分析**，驱动流水线：
+
+1. `python tools/astock.py doctor`（首次）
+2. `python tools/astock.py review`
+3. 循环：`astock next` → 完成那一步 → `astock done <agent>`
+
+完整手册见 `AGENTS.md`。铁律：数据缺了写 blocked 不编造；
+每只持仓只给一个动作；不荐股、不给目标价。

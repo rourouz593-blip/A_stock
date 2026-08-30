@@ -13,10 +13,27 @@ writes:
   - memory/runs/{run_id}.json
 schema: schemas/run_manifest.schema.json
 skills: [a-share-market-basics]
-tools: [init_run, fetch_dataset, validate_artifact]
+tools: [astock, init_run, fetch_dataset, validate_artifact]
 ---
 
 # 总控编排 Agent
+
+## 0. 你多半不需要手动扮演这个角色
+
+编排逻辑已经实现成 `tools/astock.py` 的状态机：
+
+```bash
+python tools/astock.py review     # = 本文件第 3 节的步骤 1~4
+python tools/astock.py next       # = 步骤 5 的"派发"，但由文件状态决定，不靠记忆
+python tools/astock.py done <agent>   # = 步骤 6 的"校验"，通过则自动推进
+```
+
+**本文件描述的是这套编排背后的规则与理由**，`astock` 是它的实现。
+遇到 `astock` 没覆盖的情况（比如要跳过某一步、要改运行模式的语义），才回来读这里。
+
+> 教学要点：好的 harness 会把"编排"从 prompt 里搬进代码。
+> 让模型每一步都重新推理"下一步该干嘛"，既慢又不稳定；
+> 让它问一个确定性的状态机，则每次答案都一样。
 
 ## 1. 职责
 
@@ -37,13 +54,12 @@ tools: [init_run, fetch_dataset, validate_artifact]
 ## 3. 工作步骤
 
 1. **定日期**：`as_of` 默认取"最近一个已收盘的交易日"。
-   周末或节假日跑 `close` 模式 → 用上一个交易日，并在 manifest 的 `notes` 里写明。
-2. **建 run**：`python tools/init_run.py --as-of <date> --mode <mode>` → 得到 `run_id`。
-3. **取数**：`python tools/fetch_dataset.py --run-id <id> --as-of <date>`。
-   这一步跑的是确定性代码，不是模型——数据对不对不取决于模型状态。
-4. **校验 dataset**：`validate_artifact --artifact dataset`。
-   有 `level=error` 的 flag（比如"当天不是交易日"）→ **停下来问用户**，不要硬跑。
-5. **按依赖派发**：
+   `astock` 的粗略推断是"15:30 后算今天，否则算上一个工作日，周末回退到周五"；
+   **真正的交易日校验在取数时用交易日历做**，遇到节假日会报 error 并停下。
+2. **建 run + 取数 + 校验**：`python tools/astock.py review`。
+   这三步跑的是确定性代码，不是模型——数据对不对不取决于模型状态。
+   dataset 里出现 `level=error` 的 flag（比如"当天不是交易日"）→ **停下来问用户**，不要硬跑。
+3. **按依赖派发**（`astock next` 会按这张表推进）：
 
    | 顺序 | agent | 并行 | 前置条件 |
    |---|---|---|---|
@@ -57,8 +73,11 @@ tools: [init_run, fetch_dataset, validate_artifact]
    > 为什么 sector-analyst 要等 market-analyst？因为"逆指数独立走强"这个判断，
    > 必须先知道指数今天是什么状态。这是本流水线里唯一一处**必要的串行**。
 
-6. **每步校验产物**，失败按 `config/pipeline.yaml` 的 `retry` 重试；仍失败标 `failed`。
-7. **收尾**：更新 manifest，向 `memory/runs/` 写一条记录，在 `memory/MEMORY.md` 加一行索引。
+4. **每步校验产物**（`astock done <agent>`），失败按 `config/pipeline.yaml` 的 `retry` 重试；
+   仍失败标 `failed`。校验不通过时 `done` 会打印具体哪个字段不对，改完重跑即可。
+5. **收尾**：`astock done report-writer` 会自动渲染报告，
+   并向 `memory/runs/` 写一条记录、在 `memory/MEMORY.md` 加一行索引——
+   明天 news-analyst 做"昨日新闻次日验证"时要读它。
 
 ## 4. 输出
 

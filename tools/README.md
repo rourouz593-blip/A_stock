@@ -31,7 +31,9 @@ python tools/validate_artifact.py --run-id 2026-08-28_example --artifact dataset
 
 | 工具 | 状态 | 说明 |
 |---|---|---|
-| `init_run` | ✅ | 建 run 目录，按 mode 生成步骤列表 |
+| **`astock`** | ✅ | **统一入口与流程状态机**。agent 只需要记这一个 |
+| `sync_harness` | ✅ | 生成各 harness 的适配文件 |
+| `init_run` | ✅ | 建 run 目录（`astock review` 会调它） |
 | `fetch_dataset` | ✅ | AKShare 全量取数 → `dataset.json` + `data/<run_id>/*.csv` |
 | `compute_risk` | ✅ | 仓位、集中度、单笔风险、0.5% 线 |
 | `render_report` | ✅ | `report.json` → `report.md` + 单文件 HTML 仪表盘 |
@@ -40,12 +42,31 @@ python tools/validate_artifact.py --run-id 2026-08-28_example --artifact dataset
 
 **全部已实现。** 需要你填的不是代码，是 `config/thresholds.yaml` 里的判定阈值。
 
+## astock：为什么单独做一个入口
+
+一个 coding agent 第一次进来，面对 7 个 agent、8 个工具、9 个章节，
+很容易不知道从哪下手，或者跑到一半忘了下一步。
+
+`astock next` 解决的就是这个：它读 `run_manifest.json` 的状态，
+再读对应 `agents/*.md` 的 frontmatter，把"下一步该做什么"渲染成一段可执行指令——
+读哪些文件、加载哪些技能、写哪个产物、按哪份 schema、照哪份示例抄、完成后跑什么。
+
+于是任何 agent 的工作方式都退化成一个死循环：
+
+```
+next → 干活 → done → next → 干活 → done → …
+```
+
+**流程状态在 `run_manifest.json` 里，不在 agent 的上下文里。**
+所以中途断了、换个 agent 接手、明天再继续，都能从 `astock next` 原地续上。
+
+> 教学要点：这是 harness 设计里最容易被忽略的一层——**状态机**。
+> Agent 的"记性"不可靠，所以不要让它记流程；
+> 把流程放进文件，让它每一步都来问"我现在在哪、下一步是什么"。
+
 ## 快速自检
 
 ```bash
-python tools/make_demo_run.py                                   # 造一份示例 run
-python tools/render_report.py --run-id 2026-08-28_example       # 渲染
-open workspace/runs/2026-08-28_example/report.html              # 看效果
+python tools/astock.py doctor    # 依赖、配置、网络逐项检查
+python tools/astock.py demo      # 离线示例，完全不联网
 ```
-
-这条链路**完全不联网**，是验证仓库有没有装好的最快方式。

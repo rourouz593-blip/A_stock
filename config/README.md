@@ -14,8 +14,22 @@ cp config/positions.example.yaml  config/positions.yaml
 cp config/thresholds.example.yaml config/thresholds.yaml
 ```
 
-**钱不写进 yaml。** 账户总资产放在 `.env` 的 `ASTOCK_ACCOUNT_EQUITY`，
-`.env` 已在 `.gitignore` 里。
+**钱不写进 yaml。** 账户总资产放在 `.env` 的 `ASTOCK_ACCOUNT_EQUITY`，`.env` 已在 `.gitignore` 里。
+`.env` 由 `scripts/env.py` 自动加载（纯标准库，不依赖 python-dotenv），**不需要 `source .env`**；
+真实环境变量优先于 `.env`，方便 CI 覆盖。
+
+## 都不配会怎样
+
+三份配置**全都是可选的**，缺了只影响对应章节，不阻塞流程：
+
+| 缺什么 | 后果 |
+|---|---|
+| `positions.yaml` | 章节④持仓计划、⑦风险纪律为空；①②③⑤⑥⑧ 照常 |
+| `ASTOCK_ACCOUNT_EQUITY` | 风险章节只给比例、给不出金额。**绝不允许拿持仓市值当账户规模估算**——满仓的人和三成仓的人，同样的市值对应的风险完全不同 |
+| `thresholds.yaml` | 自动回退到 `thresholds.example.yaml`（阈值全 `null`），判定由模型自己拿捏，失去可复现性 |
+
+建议顺序：先 `python tools/astock.py demo` 看产出 → 再决定配哪些。
+`tests/test_config.py` 钉住了上面这些降级行为。
 
 ## 需要你反复调的只有一个文件
 

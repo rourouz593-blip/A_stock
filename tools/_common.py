@@ -15,6 +15,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE = REPO_ROOT / "workspace"
 SCHEMAS = REPO_ROOT / "schemas"
 
+# 让 tools/ 下的每个脚本都能拿到 .env 里的配置（例如 ASTOCK_ACCOUNT_EQUITY）
+sys.path.insert(0, str(REPO_ROOT))
+try:
+    from scripts.env import load_dotenv
+
+    load_dotenv()
+except Exception:  # .env 是可选的，加载失败不该让工具挂掉
+    pass
+
 
 def emit(payload: dict) -> None:
     json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
