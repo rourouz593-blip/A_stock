@@ -54,6 +54,26 @@ tools:
       no_cache: "bool  忽略本地缓存强制重取"
     output: {ok: bool, artifact: str, detail_csv_dir: str}
 
+  - name: import_positions
+    entry: tools/import_positions.py
+    status: implemented
+    description: |
+      把从持仓截图读出的数据合并进 config/positions.yaml。
+      用两条恒等式反验读数是否正确（shares×price≈market_value、(price−cost)×shares≈pnl），
+      并保留旧文件里人写的 thesis / module / sector / stop_level。
+      默认只预览，加 --apply 才落盘，落盘前自动备份。
+    allowed_agents: [orchestrator, position-advisor]
+    input:
+      json: "str  从截图抽出的 JSON"
+      apply: "bool  真正写入"
+      allow_unverified: "bool  跳过算术自检（仅当 App 不显示市值/盈亏）"
+    output:
+      written: str
+      added: "list[str]"
+      changed: "list[str]"
+      removed: "list[str]"
+      need_thesis: "list[str]  这几只缺买入逻辑，必须问用户"
+
   - name: compute_risk
     entry: tools/compute_risk.py
     status: implemented

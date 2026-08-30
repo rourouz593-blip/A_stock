@@ -17,6 +17,7 @@
 | 「明天怎么办」「盘前看一下」（次日开盘前） | `python tools/astock.py review --mode premarket` |
 | 「这周总结一下」 | `python tools/astock.py review --mode weekly` |
 | 「复盘 8 月 26 号」 | `python tools/astock.py review --as-of 2026-08-26` |
+| **（上传持仓截图）**「更新我的持仓」「按这个截图跑复盘」 | 见下方「持仓截图导入」，**不要直接手改 positions.yaml** |
 | 「跑到哪了」「继续」 | `python tools/astock.py status` / `next` |
 | 「环境有问题」「跑不起来」 | `python tools/astock.py doctor` |
 | 「给我看看这个系统能出什么」（不联网 / 只是想看效果） | `python tools/astock.py demo` |
@@ -39,6 +40,30 @@ python tools/astock.py done <agent>   # 校验产物，通过则自动打印下�
 
 流程状态存在 `run_manifest.json` 里，不在你的上下文里——
 **中途断了、换个 agent 接手、明天再继续，都能从 `astock next` 原地续上。**
+
+### 持仓截图导入
+
+用户上传券商 App 持仓截图时：
+
+```bash
+# ① 你看图抽字段（必须含 现价/市值/盈亏，它们是校验用的）
+# ② 预览 —— 工具会用两条恒等式验你读得对不对
+python tools/import_positions.py --json '{"account_equity":..., "positions":[...]}'
+# ③ 自检通过、diff 无误后
+python tools/import_positions.py --json '...' --apply
+# ④ 跑复盘
+python tools/astock.py review --mode positions
+```
+
+方法与陷阱见 `skills/positions-import/SKILL.md`。三条要点：
+
+- **截图只能给 code / name / cost / shares。**
+  `thesis`（买入逻辑）与 `stop_level`（失效位）截图里没有，
+  工具会保留旧文件里的；**新标的必须问用户，不许猜**——
+  章节④的第一个问题就是"买入逻辑是否仍成立"。
+- **算术自检不许绕过**：`shares × price ≈ market_value`、
+  `(price − cost) × shares ≈ pnl`。对不上说明读错了，回去重看。
+- 金额被隐藏、截图不完整、混进可转债/港股通 → **停下来问用户**。
 
 ### 你负责判断，不负责取数
 
@@ -223,7 +248,7 @@ cp config/thresholds.example.yaml config/thresholds.yaml
 cp .env.example .env        # 填 ASTOCK_ACCOUNT_EQUITY（账户总资产）
 ```
 
-Python >= 3.10。所有命令从仓库根目录执行。`.env` 由 `scripts/env.py` 自动加载，不用 `source`。
+**Python >= 3.9**（推荐 3.11+）。所有命令从仓库根目录执行。`.env` 由 `scripts/env.py` 自动加载，不用 `source`。
 
 **三份配置都是可选的**，缺了只影响对应章节，不阻塞流程：
 

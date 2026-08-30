@@ -157,7 +157,7 @@ tools:  [validate_artifact]
 
 ### ② Skill 技能（`skills/`）
 
-技能是可复用的方法论。本项目的八个技能，是把"短线复盘该怎么做"拆开写成的：
+技能是可复用的方法论。本项目的九个技能，是把"短线复盘该怎么做"拆开写成的：
 
 | 技能 | 解决什么问题 |
 |---|---|
@@ -168,6 +168,7 @@ tools:  [validate_artifact]
 | `risk-discipline` | 仓位与单笔风险的计算顺序、同题材是隐形杠杆、什么情况该停手 |
 | `news-triage` | 信源分层、去重、三分类、**次日验证** |
 | `report-writing` | 九章结构、语言规范、预案要写成 if-then |
+| `positions-import` | 券商截图字段识别、七个陷阱、算术自检 |
 | `a-share-market-basics` | 涨跌停、T+1、短线术语、数据口径陷阱 |
 
 > 教学要点：这就是**上下文工程**。上下文窗口是稀缺资源，
@@ -182,7 +183,7 @@ Skill 让 agent"知道怎么做"，Tool 让 agent"真的能做"。
 - "炸板率是多少" → **Tool**（模型口算的数字每次都不一样，报告就不可复现了）
 - "这个炸板率说明情绪到哪一步了" → **Prompt**（需要判断）
 
-八个工具都是独立 CLI，因此任何 harness 都能调用。
+九个工具都是独立 CLI，因此任何 harness 都能调用。
 其中 **`astock` 是统一入口**，它把其余几个串成一条带状态的流水线：
 
 ```bash
@@ -193,6 +194,7 @@ python tools/astock.py doctor | review | next | done <agent> | status | demo
 
 ```bash
 python tools/fetch_dataset.py     --run-id ... --as-of ...    # AKShare 取数
+python tools/import_positions.py  --json '...' [--apply]       # 截图 → positions.yaml
 python tools/compute_risk.py      --run-id ...                # 仓位与单笔风险
 python tools/render_report.py     --run-id ...                # md + html
 python tools/validate_artifact.py --run-id ... --artifact ... # schema 校验
@@ -252,11 +254,12 @@ A-stock/
 │   ├── position-advisor.md          章节④⑦
 │   └── report-writer.md             章节⑤⑧ + 成文
 │
-├── skills/                      ② 八个技能包
-├── tools/                       ③ 八个 CLI 工具（全部已实现）
+├── skills/                      ② 九个技能包
+├── tools/                       ③ 九个 CLI 工具（全部已实现）
 │   ├── astock.py                    ★ 统一入口与流程状态机（agent 只需记这一个）
 │   ├── sync_harness.py              生成各 harness 的适配层
 │   ├── fetch_dataset.py             AKShare 取数
+│   ├── import_positions.py          截图 → positions.yaml（带算术自检）
 │   ├── compute_risk.py              仓位与单笔风险
 │   ├── render_report.py             report.json → md + html 仪表盘
 │   ├── validate_artifact.py         schema 校验
@@ -348,6 +351,49 @@ cp .env.example .env                                      # 填 ASTOCK_ACCOUNT_E
 真实环境变量优先于 `.env`，所以 CI 里可以直接用环境变量覆盖。
 
 
+### 持仓每天都在变：用截图更新
+
+不用手改 yaml。截一张券商 App 的持仓页发给 coding agent：
+
+```
+（上传截图）帮我更新持仓，然后跑复盘
+```
+
+agent 会读图 → 调 `tools/import_positions.py` 预览 → 你确认 → `--apply` → 跑 `--mode positions`。
+
+**它不会盲信自己读出来的数字。** 工具用券商已经算好的市值与盈亏反验：
+
+```
+shares × price          ≈ market_value
+(price − cost) × shares ≈ pnl
+```
+
+成本价读错一位，第二条立刻不成立，工具会指出"多半是成本价读错了"并拒绝落盘。
+——因为成本读错的后果不是报错，而是章节⑦的单笔风险与 0.5% 判断**全错但看起来很专业**。
+
+**截图给不了的东西不会被编出来。** `thesis`（买入逻辑）与 `stop_level`（失效位）
+不在截图里，工具按代码匹配保留旧文件里的；新标的会被列出来，
+由 agent **回头问你**——章节④的第一个问题就是"买入逻辑是否仍成立"，
+这个字段一旦是编的，整份持仓分析就失去意义了。
+
+方法与七个陷阱（可用≠持仓、摊薄成本≠持仓成本、金额被隐藏、混进可转债…）
+见 [`skills/positions-import/SKILL.md`](skills/positions-import/SKILL.md)。
+截图含真实账户信息，`.gitignore` 已挡掉常见图片格式。
+
+### 学生环境的常见坑
+
+| 症状 | 原因 | 怎么修 |
+|---|---|---|
+| `doctor` 说 Python 版本旧 | macOS 自带 python 是 3.9，`.venv` 是照它建的 | **光装新 Python 没用**，venv 必须重建：`rm -rf .venv && python3.12 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt` |
+| `pip install` 报 `jsonpath` 编译失败 | pip 太旧 | `pip install --upgrade pip setuptools wheel` 后重装 |
+| 装完依赖 `import akshare` 还是失败 | 装到系统 python 去了，不在 venv 里 | 确认提示符前面有 `(.venv)`，再 `which python3` 看路径 |
+| `AKShare 网络连通` 失败 | 代理 / 公司网络挡住了东财与新浪 | 换网络；或先用 `python tools/astock.py demo` 看离线示例 |
+| 填了 `.env` 但读不到 | —— | 本项目会自动加载 `.env`，**不用 `source`**；检查是不是写成了 `ASTOCK_ACCOUNT_EQUITY = 200000`（等号两边不能有空格） |
+
+**Python 3.9 能跑**——本项目刻意没用 `match` 语句和运行时联合类型，
+`tests/test_py_compat.py` 会守住这条。所以学生卡在版本上时，
+先让他跑起来、看到产出，再谈升级。
+
 ### 先自检 + 看示例（不联网）
 
 ```bash
@@ -378,7 +424,7 @@ python tools/astock.py review --as-of 2026-08-26 --mode close   # 指定
 ### 跑测试
 
 ```bash
-pytest tests/ -q      # 33 项，全部 mock，不访问网络
+pytest tests/ -q      # 60 项，全部 mock，不访问网络
 ```
 
 ---

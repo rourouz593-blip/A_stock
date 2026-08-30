@@ -12,8 +12,8 @@ reads:
 writes:
   - workspace/runs/{run_id}/positions_review.json
 schema: schemas/positions_review.schema.json
-skills: [position-review, risk-discipline, sector-ladder]
-tools: [compute_risk, validate_artifact]
+skills: [position-review, risk-discipline, sector-ladder, positions-import]
+tools: [compute_risk, import_positions, validate_artifact]
 ---
 
 # 持仓顾问 Agent（章节四 + 章节七）

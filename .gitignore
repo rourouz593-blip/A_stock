@@ -16,7 +16,15 @@ workspace/cache/
 
 # 个人配置：持仓与阈值不入库，只保留 example
 config/positions.yaml
+config/positions.yaml.bak
 config/thresholds.yaml
+
+# 持仓截图含真实账户信息，绝不入库
+*.png
+*.jpg
+*.jpeg
+*.webp
+!docs/**/*.png
 
 # 数据落盘
 data/

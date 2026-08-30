@@ -137,10 +137,38 @@ def default_as_of() -> tuple[str, str]:
 
 
 # ── doctor ─────────────────────────────────────────────────────
+MIN_PY = (3, 9)        # 硬性下限：低于此跑不起来
+NICE_PY = (3, 11)      # 推荐版本：3.9 已 EOL，能跑但建议升
+
+
+def _python_fix() -> str:
+    """给出**当前这台机器上**最短的修复路径。
+
+    学生最常见的情况：用 macOS 自带的 python3.9 建了 .venv。
+    这时候光装新 Python 没用——venv 是照着旧解释器建的，必须重建。
+    """
+    in_venv = sys.prefix != sys.base_prefix
+    steps = []
+    if sys.platform == "darwin":
+        steps.append("装新 Python：  brew install python@3.12   "
+                     "（没有 brew 就去 python.org 下安装包）")
+    else:
+        steps.append("装新 Python：  用系统包管理器安装 python3.12")
+    if in_venv:
+        steps.append("重建虚拟环境：rm -rf .venv && python3.12 -m venv .venv && "
+                     "source .venv/bin/activate")
+        steps.append("重装依赖：    pip install -r requirements.txt")
+    else:
+        steps.append("建虚拟环境：  python3.12 -m venv .venv && source .venv/bin/activate")
+        steps.append("装依赖：      pip install -r requirements.txt")
+    return "\n     ".join(steps)
+
+
 def cmd_doctor(args) -> None:
     say(_color("astock doctor —— 环境自检", C_B))
     say()
     ok = True
+    fails: list[tuple[str, str]] = []
 
     def check(label: str, passed: bool, detail: str = "", fix: str = "", fatal: bool = True) -> None:
         nonlocal ok
@@ -151,9 +179,21 @@ def cmd_doctor(args) -> None:
                 say(f"   {_color('→ ' + fix, C_DIM)}")
             if fatal:
                 ok = False
+                fails.append((label, fix))
 
     v = sys.version_info
-    check("Python >= 3.10", v >= (3, 10), f"当前 {v.major}.{v.minor}.{v.micro}")
+    cur = f"{v.major}.{v.minor}.{v.micro}"
+    if v < MIN_PY:
+        check(f"Python >= {MIN_PY[0]}.{MIN_PY[1]}", False, f"当前 {cur}，太旧了跑不起来",
+              _python_fix())
+    elif v < NICE_PY:
+        eol = "（3.9 已停止维护）" if v[:2] == (3, 9) else ""
+        check("Python 版本", True, f"当前 {cur} —— 能跑{eol}，建议有空升到 3.11+")
+        say(f"   {_color('→ 不急，先跑起来看产出；要升的话：', C_DIM)}")
+        for line in _python_fix().split("\n     "):
+            say(f"     {_color(line, C_DIM)}")
+    else:
+        check("Python 版本", True, f"当前 {cur}")
 
     for mod, fatal, fix in [("akshare", True, "pip install -r requirements.txt"),
                             ("pandas", True, "pip install -r requirements.txt"),
@@ -200,9 +240,16 @@ def cmd_doctor(args) -> None:
         as_of, note = default_as_of()
         say(_color(f"✓ 一切就绪。下一步：python tools/astock.py review   （将分析 {as_of}{note}）", C_OK))
     elif ok:
-        say(_color("! 依赖齐全但连不上 AKShare。可以跑离线示例：python tools/astock.py demo", C_DIM))
+        say(_color("! 依赖齐全但连不上 AKShare —— 真实取数暂时跑不了。", C_DIM))
+        say(_color("  离线示例照样能看：python tools/astock.py demo", C_DIM))
     else:
-        say(_color("✗ 有必需项未通过，先按上面的提示修复", C_NO))
+        say(_color(f"✗ {len(fails)} 项必需检查未通过：", C_NO))
+        for i, (label, fix) in enumerate(fails, 1):
+            say(f"  {i}. {label}")
+            for line in (fix or "见上面的提示").split("\n     "):
+                say(f"     {line}")
+        say()
+        say(_color("修完再跑一次 python tools/astock.py doctor", C_DIM))
         sys.exit(1)
 
 

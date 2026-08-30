@@ -35,7 +35,7 @@ status: draft           # skeleton / draft / stable
 ---
 ```
 
-## 现有技能包（8 个）
+## 现有技能包（9 个）
 
 | 技能 | 用途 | 被谁用 | 状态 |
 |---|---|---|---|
@@ -47,6 +47,7 @@ status: draft           # skeleton / draft / stable
 | `risk-discipline` | 仓位、单笔风险、是否停手的计算与判定 | position, report | draft |
 | `news-triage` | 信源分层、去重、三分类、次日验证 | news | draft |
 | `report-writing` | 九章结构、语言规范、仪表盘约定 | report | draft |
+| `positions-import` | 券商截图字段识别、七个陷阱、算术自检 | position, orchestrator | draft |
 
 **状态说明**：`draft` = 框架与方法论已写，但**具体阈值仍是 `TODO(strategy)`**。
 比如"炸板率多少算退潮"——这个数需要用历史数据回测确定，或由用户按自己的经验填。
