@@ -9,6 +9,7 @@ reads:
   - workspace/runs/{run_id}/market.json
   - workspace/runs/{run_id}/sectors.json
   - config/positions.yaml
+  - memory/positions_history.jsonl
 writes:
   - workspace/runs/{run_id}/positions_review.json
 schema: schemas/positions_review.schema.json
@@ -27,6 +28,8 @@ tools: [compute_risk, import_positions, validate_artifact]
 ## 2. 输入
 
 - `positions.yaml`：代码、成本、数量、**买入逻辑**、交易模块、失效位
+- `memory/positions_history.jsonl`：只增不改的持仓流水，
+  第 3、4、7 条行为自检的证据来源（由 `compute_risk` 比对成 `behavior_signals`）
 - `dataset.holdings`：持仓股的收盘价、涨跌幅、均线位置、量比
 - `market.json`：大盘强弱与情绪阶段（算相对强弱的基准）
 - `sectors.json`：这只票所属板块今天是什么方向、什么阶段、龙头是谁
@@ -60,6 +63,10 @@ tools: [compute_risk, import_positions, validate_artifact]
 7. **短线失败后临时改成长线** —— 买入逻辑写的是"打板"，套了以后改说"看好基本面"。
 
 方法论与判定口径见 `skills/position-review/`。
+
+**先跑 `compute_risk`，它会返回 `behavior_signals`**——
+那是从持仓流水里比出来的**事实**（加仓、清仓后买回、逻辑被改写、失效位下移）。
+拿事实去填这七条，而不是凭印象。信号只说发生了什么，定性仍然是你的判断。
 
 **触发就直说，指名道姓。** 这一节的价值就在于说用户不爱听的话；
 说得客气就等于没说。

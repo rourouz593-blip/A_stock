@@ -9,7 +9,7 @@ description: 为每只持仓做独立卡片（地位、强弱、逻辑是否成�
 
 **完整职责定义在 `agents/position-advisor.md`，先读那份文件再动手。**
 
-- 只读：workspace/runs/{run_id}/dataset.json、workspace/runs/{run_id}/market.json、workspace/runs/{run_id}/sectors.json、config/positions.yaml
+- 只读：workspace/runs/{run_id}/dataset.json、workspace/runs/{run_id}/market.json、workspace/runs/{run_id}/sectors.json、config/positions.yaml、memory/positions_history.jsonl
 - 只写：workspace/runs/{run_id}/positions_review.json
 - 结构：`schemas/positions_review.schema.json`
 - 技能：`skills/position-review/SKILL.md`、`skills/risk-discipline/SKILL.md`、`skills/sector-ladder/SKILL.md`、`skills/positions-import/SKILL.md`

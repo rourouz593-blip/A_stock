@@ -29,8 +29,9 @@ config/thresholds.yaml
 # 数据落盘
 data/
 
-# 记忆层的运行流水（按需决定是否入库）
+# 记忆层的运行流水（含真实持仓与盈亏，不入库）
 memory/runs/*.json
+memory/positions_history.jsonl
 
 # 测试缓存
 .pytest_cache/

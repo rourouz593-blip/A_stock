@@ -283,6 +283,21 @@ def main() -> None:
     POSITIONS.parent.mkdir(parents=True, exist_ok=True)
     POSITIONS.write_text(content, encoding="utf-8")
 
+    # 记一笔历史：行为自检的第 3、4、7 条要靠它才能判定
+    sys.path.insert(0, str(REPO_ROOT))
+    from scripts.history import append_snapshot, behavior_signals  # noqa: E402
+
+    snap = []
+    price_by_code = {n["code"]: n.get("price") for n in new}
+    for m in merged:
+        row = dict(m)
+        row["price"] = price_by_code.get(m["code"])
+        if row.get("price") and m.get("cost"):
+            row["pnl_pct"] = round((row["price"] / m["cost"] - 1) * 100, 2)
+        snap.append(row)
+    signals = behavior_signals(snap)      # 先比对，再写入——否则会跟自己比
+    append_snapshot(snap, source="import")
+
     emit({
         "ok": True,
         "written": "config/positions.yaml",
@@ -293,6 +308,8 @@ def main() -> None:
         "removed": delta["removed"],
         "need_thesis": need_thesis,
         "account_equity_hint": (f"ASTOCK_ACCOUNT_EQUITY={float(equity):g}" if equity else None),
+        "behavior_signals": signals,
+        "history": "memory/positions_history.jsonl",
         "next": "python tools/astock.py review --mode positions",
     })
 

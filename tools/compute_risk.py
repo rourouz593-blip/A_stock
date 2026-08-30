@@ -90,6 +90,12 @@ def main() -> None:
         for k, v in themes.items()
     ]
 
+    # 记一笔当日快照，并比对历史 —— 章节④第 3、4、7 条自检的证据来源
+    from scripts.history import append_snapshot, behavior_signals
+
+    signals = behavior_signals(mtm["positions"])          # 先比对
+    append_snapshot(mtm["positions"], source="run", as_of=dataset.get("as_of"))
+
     max_daily = th.get("max_daily_loss_pct")
     emit({
         "account_equity": equity,
@@ -102,7 +108,11 @@ def main() -> None:
         "max_daily_loss": round(equity * max_daily / 100, 2) if max_daily else None,
         "thresholds_missing": [k for k, v in th.items() if v is None],
         "positions_marked": mtm["positions"],
-        "note": "stop_trading 由 position-advisor 结合情绪阶段与行为自检判定，本工具只给数字",
+        "behavior_signals": signals,
+        "history_file": "memory/positions_history.jsonl",
+        "note": "stop_trading 由 position-advisor 结合情绪阶段与行为自检判定，本工具只给数字。"
+                "behavior_signals 只陈述发生了什么，不做定性——"
+                "同样是加仓，主升期加强势票和浮亏时摊成本是两回事，代码分不出来",
     })
 
 
