@@ -8,6 +8,7 @@
 | `pipeline.yaml` | 四种运行模式、并行分组、重试与硬约束 | ✅ |
 | `positions.example.yaml` | 持仓模板（复制为 `positions.yaml` 填写） | 示例入库 |
 | `thresholds.example.yaml` | 判定阈值（复制为 `thresholds.yaml` 调整） | 示例入库 |
+| `models.yaml.example` | 模型 provider 与档位映射（**只有 api 模式需要**） | 示例入库 |
 
 ```bash
 cp config/positions.example.yaml  config/positions.yaml

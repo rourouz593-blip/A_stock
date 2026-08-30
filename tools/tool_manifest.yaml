@@ -7,13 +7,14 @@ tools:
     status: implemented
     description: |
       统一入口与流程状态机。任何 coding agent 只需要记住这一个命令。
-      doctor 环境自检 / review 开工 / next 我该做什么 / done 校验并推进 / status 进度 / demo 离线示例。
+      doctor 环境自检 / review 开工 / next 我该做什么 / done 校验并推进 /
+      **run 无人值守跑完全流程（用 config/models.yaml 配的模型）** / status 进度 / demo 离线示例。
       next 会读 run_manifest 的状态与 agents/*.md 的 frontmatter，
       把"下一步该做什么"渲染成可执行指令——所以 agent 不需要记流程。
     allowed_agents: [orchestrator, data-engineer, market-analyst, sector-analyst,
                      news-analyst, position-advisor, report-writer]
     input:
-      cmd: "doctor | review | next | done | status | demo"
+      cmd: "doctor | review | next | done | run | status | demo"
       run_id: "str  可选，默认取最近一个 run"
       as_of: "str  可选，默认按当前时间推断"
       mode: "str  close | premarket | positions | weekly"
@@ -23,6 +24,16 @@ tools:
       writes: "list[str]"
       schema: str
       finish_command: str
+
+  - name: net_check
+    entry: tools/net_check.py
+    status: implemented
+    description: |
+      逐个数据源域名做连通性诊断：DNS（A/AAAA）、当前设置、强制直连、直连+仅 IPv4。
+      把"连不上"拆成 DNS / 代理 / IPv6 出口 / 站点本身 四类，并给出对应的修复命令。
+    allowed_agents: [orchestrator, data-engineer]
+    input: {timeout: "float  单次请求超时秒数"}
+    output: "人读的诊断报告；退出码 0=至少一种方式可达，1=全不可达"
 
   - name: sync_harness
     entry: tools/sync_harness.py

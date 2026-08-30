@@ -12,6 +12,7 @@ reads:
   - memory/positions_history.jsonl
 writes:
   - workspace/runs/{run_id}/positions_review.json
+dataset_blocks: [calendar, holdings]
 schema: schemas/positions_review.schema.json
 skills: [position-review, risk-discipline, sector-ladder, positions-import]
 tools: [compute_risk, import_positions, validate_artifact]

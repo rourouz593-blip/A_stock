@@ -49,6 +49,7 @@ open workspace/runs/2026-08-28_example/report.html
     - [跑真实数据](#跑真实数据)
     - [跑测试](#跑测试)
   - [六点五、任何 coding agent 怎么接手](#六点五任何-coding-agent-怎么接手)
+- [六点六、两种执行方式：谁来做那五步判断](#六点六两种执行方式谁来做那五步判断)
     - [一句话就能启动](#一句话就能启动)
     - [唯一需要记住的循环](#唯一需要记住的循环)
     - [为什么要做成状态机](#为什么要做成状态机)
@@ -280,7 +281,7 @@ A-stock/
 │
 ├── skills/                      ② 九个技能包
 ├── tools/                       ③ 九个 CLI 工具（全部已实现）
-│   ├── astock.py                    ★ 统一入口与流程状态机（agent 只需记这一个）
+│   ├── astock.py                    ★ 统一入口 + 状态机 + api 模式执行器
 │   ├── sync_harness.py              生成各 harness 的适配层
 │   ├── fetch_dataset.py             AKShare 取数
 │   ├── import_positions.py          截图 → positions.yaml（带算术自检）
@@ -295,6 +296,8 @@ A-stock/
 │
 ├── scripts/                     数据层（AKShare）
 │   ├── ak_client.py                 重试 + 缓存 + 响亮失败
+│   ├── llm.py                       provider 无关的模型调用（OpenAI 兼容 + Anthropic）
+│   ├── agent_runner.py              提示词组装 + schema 校验 + 重试
 │   ├── fetch/                       calendar / market / breadth / sectors / stocks / news
 │   ├── clean/derive.py              派生指标与交付前自检
 │   ├── positions.py                 读取校验持仓 + 按收盘价估值
@@ -302,6 +305,7 @@ A-stock/
 │
 ├── config/
 │   ├── pipeline.yaml                四种运行模式、并行分组、硬约束
+│   ├── models.yaml.example          ★ 模型 provider 与档位（api 模式用）
 │   ├── positions.example.yaml       持仓模板
 │   └── thresholds.example.yaml      ★ 判定阈值，唯一需要你反复调的文件
 │
@@ -448,7 +452,13 @@ stop_level: 11.50                                        # 破了就承认判断
 | `doctor` 说 Python 版本旧 | macOS 自带 python 是 3.9，`.venv` 是照它建的 | **光装新 Python 没用**，venv 必须重建：`rm -rf .venv && python3.12 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt` |
 | `pip install` 报 `jsonpath` 编译失败 | pip 太旧 | `pip install --upgrade pip setuptools wheel` 后重装 |
 | 装完依赖 `import akshare` 还是失败 | 装到系统 python 去了，不在 venv 里 | 确认提示符前面有 `(.venv)`，再 `which python3` 看路径 |
-| `AKShare 网络连通` 失败 | 代理 / 公司网络挡住了东财与新浪 | 换网络；或先用 `python tools/astock.py demo` 看离线示例 |
+| `ProxyError ... 127.0.0.1:xxxx Connection refused` | **开着代理但代理客户端没运行**（VPN 关了、代理设置还在） | 三选一：开代理客户端 / `unset http_proxy https_proxy all_proxy` / `ASTOCK_DIRECT=1` |
+| 上面三招都试了还是报代理错 | macOS 的**系统代理**独立于环境变量，VPN 退出时不会清掉 | 系统设置 → 网络 → Wi-Fi → 详细信息 → 代理 → 关掉「网页代理」和「SOCKS 代理」 |
+| 第一步交易日历秒过、第二步却连不上 | 日历命中了本地缓存，看起来"网络是好的" | 缓存已加 30 分钟 TTL；`--no-cache` 可强制重取 |
+| `AKShare 网络连通` 失败，直连也不行 | 可能是 DNS、系统代理、或 **IPv6 出口坏掉** | **先跑 `python tools/net_check.py`**——它逐个域名测 DNS(A/AAAA) / 当前设置 / 强制直连 / 仅 IPv4，直接告诉你是哪一类 |
+| 新浪能连、东财连不上 | 典型的 IPv6 出口故障：有 AAAA 记录的站点超时 | `ASTOCK_IPV4_ONLY=1 python tools/astock.py review`（系统也会自动降级重试） |
+| `ConnectTimeout` 在 `80.push2.eastmoney.com` | akshare 取指数 K 线前会先向这台机器拉一张**多余的**对照表，而东财各分片主机可达性差别很大 | 已绕开（市场号写死在 `INDEX_MARKET_ID`）；东财整体不通时退到新浪，但成交额会缺失 |
+| `RemoteDisconnected` / `Connection aborted` | **连上了但被服务器掐掉**。akshare 有些接口裸调用不带 UA，东财会断开；也可能是代理线路把境内站绕到了境外 | 已自动补浏览器请求头 + 被掐时自动绕代理重试；仍不行跑 `net_check.py` 看「裸UA」那一列 |
 | 填了 `.env` 但读不到 | —— | 本项目会自动加载 `.env`，**不用 `source`**；检查是不是写成了 `ASTOCK_ACCOUNT_EQUITY = 200000`（等号两边不能有空格） |
 
 **Python 3.9 能跑**——本项目刻意没用 `match` 语句和运行时联合类型，
@@ -485,7 +495,7 @@ python tools/astock.py review --as-of 2026-08-26 --mode close   # 指定
 ### 跑测试
 
 ```bash
-pytest tests/ -q      # 60 项，全部 mock，不访问网络
+pytest tests/ -q      # 143 项，全部 mock，不访问网络
 ```
 
 ---
@@ -564,6 +574,97 @@ agents/*.md + AGENTS.md          ← 唯一事实来源
 `tests/test_harness.py` 会检查两边同步，有人手改生成物就报错。
 
 详见 [`docs/06-harness适配.md`](docs/06-harness适配.md)。
+
+## 六点六、两种执行方式：谁来做那五步判断
+
+系统里有九个章节，其中**五步是判断**（市场、板块、新闻、持仓、报告），
+剩下的取数、算指标、算风险、渲染都是确定性代码。
+
+那五步判断可以交给两种执行者，**角色定义、技能、契约完全共用**：
+
+| | harness 模式 | api 模式 |
+|---|---|---|
+| 谁在做判断 | 你所在的 coding agent（Claude Code / opencode / Codex） | `config/models.yaml` 里配的模型 |
+| 怎么跑 | `astock review` → `next` → `done` 循环 | `astock run` 一条命令 |
+| 需要 API key | **不需要** | 需要（本地 Ollama 除外） |
+| 能否无人值守 | 不能，要人坐在终端前 | **能**，可以挂定时任务 |
+| 花费 | 占用你编码 agent 的额度 | 每次复盘 5 次调用，提示词合计约 **12 万字符**（按各家分词器大致 **6–8 万输入 token**） |
+| 适合 | 边跑边改、教学演示、调阈值 | 每天例行跑、不想占编码额度 |
+
+> 这是我一开始的设计缺陷：默认了"你一直坐在某个编码 agent 里"。
+> 那既跑不了章节九说的"收盘后自动运行"，对每天要跑的人也太贵。
+
+### api 模式怎么配
+
+```bash
+cp config/models.yaml.example config/models.yaml
+# 在里面挑一个 provider，把对应的 key 填进 .env
+python tools/astock.py doctor      # 会告诉你当前处于哪种模式、缺什么
+python tools/astock.py run         # 取数 + 五步分析 + 渲染，一条命令跑完
+```
+
+具体多少钱取决于你选哪个模型，`astock run` 跑完会把真实用量打出来并写进 `run_manifest.json`。
+
+**只要是 OpenAI 兼容的接口就能接**——DeepSeek、通义、Kimi、智谱、OpenRouter，
+以及本地的 Ollama / vLLM（零 API 成本）。Anthropic 原生协议单独做了一条分支。
+不装任何厂商 SDK，只用 `requests`：每多一个 SDK 就多一次版本冲突，而这些协议本身是稳定的。
+
+### 三个省钱的机制
+
+**① 按档位分模型。** `agents/*.md` 的 frontmatter 里写的是**档位**不是模型名：
+
+```yaml
+model: reasoning     # market / sector / position / report
+model: default       # news / data
+```
+
+`models.yaml` 的 `tiers` 把档位映射到具体模型。所以"新闻分诊用便宜模型、
+情绪阶段判断用强模型"这个决定写在角色定义里，换模型只改三行，不动任何 agent。
+
+**② 只喂该看的数据。** 每个 agent 的 frontmatter 声明 `dataset_blocks`：
+
+```yaml
+dataset_blocks: [calendar, sectors, sector_flow, limit_pool, breadth]
+```
+
+板块分析师拿不到 `holdings`——**既省 token，也让"不许替持仓找理由"从一句纪律变成一个机制**。
+以前那只是 agent 定义里的一句话，现在是代码层面的事实（`tests/test_agent_runner.py` 守着）。
+
+**③ 关掉示例产物。** `models.yaml` 的 `runtime.include_example_artifact: false`
+能省约 21% 输入 token——代价是模型少了一份字段形状参考，产物容易缺字段、多重试一轮。
+便宜模型建议留着，强模型可以关掉。
+
+**④ 预算闸门。** `models.yaml` 的 `budget` 段设 token / 花费上限，超了立刻停在当前步骤。
+跑飞的循环比跑错的结论更可怕。
+
+价格**不写死在代码里**——模型价格随时在变，写死的半年后就是错的。
+token 用量永远统计，价格由你在 `models.yaml` 里填；没填就只报用量。
+
+### 每天自动跑（章节九）
+
+api 模式打通之后，「每个交易日收盘后自动运行」才真正可行：
+
+```cron
+# 交易日 15:40 收盘复盘
+40 15 * * 1-5  cd ~/Code/A-stock && .venv/bin/python tools/astock.py run --mode close
+# 次日 08:45 盘前更新
+45 8  * * 1-5  cd ~/Code/A-stock && .venv/bin/python tools/astock.py run --mode premarket
+```
+
+非交易日会在取数阶段自己停下（交易日历会报 error），不会产出一份没有数据支撑的复盘。
+
+### 两种模式可以混用
+
+api 模式跑到某一步失败了，可以切回手工：
+
+```bash
+python tools/astock.py next                    # 看看卡在哪一步、要读什么
+# 你自己（或你的 coding agent）完成那一步
+python tools/astock.py done sector-analyst     # 校验通过后继续
+python tools/astock.py run                     # 剩下的步骤接着自动跑
+```
+
+因为流程状态在 `run_manifest.json` 里，两种执行者看到的是同一份状态。
 
 ## 七、四种运行方式
 

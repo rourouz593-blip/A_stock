@@ -8,6 +8,10 @@ akshare>=1.16          # A 股全部数据来源，免费无需 token
 pandas>=2.0
 numpy>=1.24
 
+# ── 模型调用（api 模式）────────────────────────────────
+requests>=2.31         # LLM 调用只用它，不装任何厂商 SDK：
+                       # 每多一个 SDK 就多一次版本冲突，而这些服务的协议本身是稳定的
+
 # ── 契约与配置 ──────────────────────────────────────────
 jsonschema>=4.21       # 文件契约校验（tools/validate_artifact.py）
 pyyaml>=6.0            # 配置与 frontmatter 解析

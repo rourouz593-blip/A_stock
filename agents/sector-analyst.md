@@ -9,6 +9,7 @@ reads:
   - workspace/runs/{run_id}/market.json
 writes:
   - workspace/runs/{run_id}/sectors.json
+dataset_blocks: [calendar, sectors, sector_flow, limit_pool, breadth]
 schema: schemas/sectors.schema.json
 skills: [sector-ladder, market-emotion-cycle, a-share-market-basics]
 tools: [validate_artifact]

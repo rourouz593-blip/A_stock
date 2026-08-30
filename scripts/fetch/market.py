@@ -1,8 +1,63 @@
 """指数行情：快照、日线、分时。对应报告章节一（市场总览）与章节二（指数复盘）。"""
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 from ..ak_client import call, now_iso, try_call
 from ..contracts import CORE_INDEXES, DataBlock, Provenance, QualityFlag, to_ak_date
+
+# ── 绕开 index_code_id_map_em() ────────────────────────────────
+# akshare 的 index_zh_a_hist() 在取 K 线之前，会先请求 80.push2.eastmoney.com
+# 拉一份「全部指数 → 市场号」的对照表，只为了知道 000001 属于沪市还是深市。
+#
+# 问题是：K 线接口 push2his.eastmoney.com 在很多网络上是通的，
+# 而 80.push2 这个分片主机经常连不上（超时 / reset）。
+# 于是"明明数据源能连"，却卡在一个纯粹多余的前置请求上。
+#
+# 我们只盯四个固定指数，市场号是常数，根本不需要去问。
+# 直接把那张表喂给 akshare，省掉一次请求，也去掉一个故障点。
+INDEX_MARKET_ID = {"000001": 1, "399001": 0, "399006": 0, "000688": 1}  # 1=沪 0=深
+
+
+@contextmanager
+def _skip_index_code_map():
+    try:
+        from akshare.index import index_zh_em as m
+    except Exception:
+        yield
+        return
+    orig = getattr(m, "index_code_id_map_em", None)
+    if orig is None:
+        yield
+        return
+    m.index_code_id_map_em = lambda: dict(INDEX_MARKET_ID)
+    try:
+        yield
+    finally:
+        m.index_code_id_map_em = orig
+
+
+def _from_sina(code: str, as_of: str, lookback_days: int):
+    """备用源：新浪指数日线。
+
+    什么时候用：东财整个不可达时。
+    代价要说清楚——**新浪这个接口不返回成交额**，
+    所以章节①的"两市成交额"会缺失。宁可缺一个字段并标注，也不编一个数。
+    """
+    import pandas as pd
+
+    board = "sh" if INDEX_MARKET_ID.get(code) == 1 else "sz"
+    df = call("stock_zh_index_daily", {"symbol": f"{board}{code}"})
+    df = df.copy()
+    df["日期"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df = df[df["日期"] <= as_of].tail(lookback_days * 2)
+    df = df.rename(columns={"open": "开盘", "close": "收盘", "high": "最高",
+                            "low": "最低", "volume": "成交量"})
+    prev = df["收盘"].shift(1)
+    df["涨跌幅"] = ((df["收盘"] / prev - 1) * 100).round(2)
+    df["振幅"] = ((df["最高"] - df["最低"]) / prev * 100).round(2)
+    df["成交额"] = float("nan")          # 新浪不给，如实留空
+    return df[["日期", "开盘", "收盘", "最高", "最低", "成交量", "成交额", "振幅", "涨跌幅"]]
 
 # 日内四段（章节二要求），左闭右开
 SESSIONS = [
@@ -19,11 +74,25 @@ def fetch_index_daily(as_of: str, lookback_days: int = 60) -> DataBlock:
 
     start = (pd.Timestamp(as_of) - pd.Timedelta(days=lookback_days * 2)).strftime("%Y%m%d")
     frames, flags = [], []
+    fallback_from = None
     for code, meta in CORE_INDEXES.items():
-        df = call(
-            "index_zh_a_hist",
-            {"symbol": code, "period": "daily", "start_date": start, "end_date": to_ak_date(as_of)},
-        )
+        try:
+            with _skip_index_code_map():
+                df = call(
+                    "index_zh_a_hist",
+                    {"symbol": code, "period": "daily",
+                     "start_date": start, "end_date": to_ak_date(as_of)},
+                )
+        except Exception as e:
+            # 东财不可达 → 退到新浪。降级必须出声，并且如实记进 provenance
+            print(f"[market] 东财取 {meta['name']} 失败，改用新浪备用源：{str(e)[:120]}",
+                  flush=True)
+            df = _from_sina(code, as_of, lookback_days)
+            fallback_from = "akshare.index_zh_a_hist"
+            flags.append(QualityFlag(
+                "index_hist", "warning",
+                f"{meta['name']} 用了新浪备用源，**成交额缺失**——"
+                f"章节①的两市成交额将无法计算"))
         df = df.copy()
         df["指数代码"] = code
         df["指数名称"] = meta["name"]
@@ -42,10 +111,12 @@ def fetch_index_daily(as_of: str, lookback_days: int = 60) -> DataBlock:
         rows=len(all_df),
         inline=_today_snapshot(all_df, as_of),
         provenance=Provenance(
-            source="akshare.index_zh_a_hist",
+            source=("akshare.stock_zh_index_daily(新浪备用)" if fallback_from
+                    else "akshare.index_zh_a_hist"),
             fetched_at=now_iso(),
             params={"symbols": list(CORE_INDEXES), "period": "daily"},
             unit="CNY_yuan",
+            fallback_from=fallback_from,
         ),
         flags=flags,
     ), all_df
@@ -60,22 +131,32 @@ def _today_snapshot(all_df, as_of: str) -> list[dict]:
             continue
         today = sub.iloc[-1]
         prev = sub.iloc[-2] if len(sub) > 1 else None
-        amt = float(today["成交额"])
-        prev_amt = float(prev["成交额"]) if prev is not None else None
+
+        def _f(v):
+            """NaN → None。新浪备用源不返回成交额，缺失就是缺失，不能当成 0。"""
+            try:
+                x = float(v)
+            except (TypeError, ValueError):
+                return None
+            return None if x != x else x
+
+        amt = _f(today["成交额"])
+        prev_amt = _f(prev["成交额"]) if prev is not None else None
         out.append(
             {
                 "code": code,
                 "name": meta["name"],
                 "date": str(today["日期"]),
-                "open": float(today["开盘"]),
-                "close": float(today["收盘"]),
-                "high": float(today["最高"]),
-                "low": float(today["最低"]),
-                "pct_chg": float(today["涨跌幅"]),
-                "amplitude": float(today["振幅"]),
+                "open": _f(today["开盘"]),
+                "close": _f(today["收盘"]),
+                "high": _f(today["最高"]),
+                "low": _f(today["最低"]),
+                "pct_chg": _f(today["涨跌幅"]),
+                "amplitude": _f(today["振幅"]),
                 "amount": amt,
-                "prev_close": float(prev["收盘"]) if prev is not None else None,
-                "amount_chg_pct": round((amt / prev_amt - 1) * 100, 2) if prev_amt else None,
+                "prev_close": _f(prev["收盘"]) if prev is not None else None,
+                "amount_chg_pct": (round((amt / prev_amt - 1) * 100, 2)
+                                   if (amt and prev_amt) else None),
             }
         )
     return out
@@ -91,15 +172,16 @@ def fetch_index_intraday(as_of: str) -> DataBlock:
 
     frames, flags, sessions = [], [], {}
     for code, meta in CORE_INDEXES.items():
-        df, err = try_call(
-            "index_zh_a_hist_min_em",
-            {
-                "symbol": code,
-                "period": "1",
-                "start_date": f"{as_of} 09:15:00",
-                "end_date": f"{as_of} 15:05:00",
-            },
-        )
+        with _skip_index_code_map():
+            df, err = try_call(
+                "index_zh_a_hist_min_em",
+                {
+                    "symbol": code,
+                    "period": "1",
+                    "start_date": f"{as_of} 09:15:00",
+                    "end_date": f"{as_of} 15:05:00",
+                },
+            )
         if df is None or len(df) == 0:
             flags.append(QualityFlag("index_intraday", "warning", f"{meta['name']} 分时数据取不到: {err}"))
             continue

@@ -132,6 +132,16 @@ def build(run_id: str, as_of: str, mode: str = "close", with_positions: bool = T
     for b in blocks.values():
         flags.extend(b.flags)
     flags.extend(derive.sanity_check(dataset))
+
+    # 用了缓存就如实说 —— 实时快照放久了会让情绪判断跑偏
+    if ak_client.CACHE_HITS:
+        oldest = max(h["age_min"] for h in ak_client.CACHE_HITS)
+        names = "、".join(sorted({h["call"] for h in ak_client.CACHE_HITS}))
+        flags.append(QualityFlag(
+            "calendar" if len(ak_client.CACHE_HITS) == 1 else "index_spot",
+            "info" if oldest <= 30 else "warning",
+            f"{len(ak_client.CACHE_HITS)} 个接口用了本地缓存（最旧 {oldest:.0f} 分钟前）：{names}。"
+            f"要强制重取加 --no-cache"))
     dataset["quality_flags"] = [
         {"block": f.block, "level": f.level, "message": f.message, "affected_range": f.affected_range}
         for f in flags
@@ -156,9 +166,43 @@ def main() -> None:
         if cache.is_dir():
             shutil.rmtree(cache)
 
-    dataset = build(args.run_id, args.as_of, args.mode, with_positions=not args.no_positions)
+    try:
+        dataset = build(args.run_id, args.as_of, args.mode,
+                        with_positions=not args.no_positions)
+    except ak_client.FetchError as e:
+        # 学生看 traceback 是没用的，给一句能照着做的话
+        print(f"\n✗ 取数中断：{e}", file=sys.stderr)
+        print("\n  没有当日数据就没有当日复盘，所以这里必须停下，"
+              "不会拿旧数据凑一份报告。", file=sys.stderr)
+        print("  定位网络问题：python tools/net_check.py"
+              "（分 DNS / 代理 / IPv6 / 站点 四类给结论）", file=sys.stderr)
+        print("  想先看看系统能出什么：python tools/astock.py demo", file=sys.stderr)
+        sys.exit(2)
+
     out = REPO_ROOT / "workspace" / "runs" / args.run_id / "dataset.json"
-    store.write_json(out, dataset)
+    try:
+        store.write_json(out, dataset)
+    except Exception as e:
+        # 取数已经花了几分钟，绝不能因为写文件出错就全部丢掉。
+        # 先用最宽松的方式落一份原始数据，再把问题如实报出来。
+        import json as _json
+
+        raw = out.with_name("dataset.raw.json")
+        raw.write_text(_json.dumps(dataset, ensure_ascii=False, indent=2, default=str),
+                       encoding="utf-8")
+        print(f"\n✗ 写 dataset.json 失败：{type(e).__name__}: {e}", file=sys.stderr)
+        print(f"  取到的数据没有丢，已原样存到 {raw.relative_to(REPO_ROOT)}", file=sys.stderr)
+        print("  这是本项目的 bug（某个字段的类型 JSON 不认），"
+              "请把上面这行连同报错一起反馈", file=sys.stderr)
+        sys.exit(3)
+
+    if store.COERCED:
+        dataset.setdefault("quality_flags", []).append({
+            "block": "calendar", "level": "info",
+            "message": f"{len(store.COERCED)} 个字段的类型被强制转成了字符串："
+                       f"{'、'.join(store.COERCED[:5])}",
+            "affected_range": None})
+        store.write_json(out, dataset)
 
     errs = [f for f in dataset["quality_flags"] if f["level"] == "error"]
     warns = [f for f in dataset["quality_flags"] if f["level"] == "warning"]

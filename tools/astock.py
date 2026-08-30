@@ -2,11 +2,17 @@
 """astock —— 本仓库的统一入口。任何 coding agent 只需要记住这一个命令。
 
     python tools/astock.py doctor                 # 环境自检：能不能跑
-    python tools/astock.py review                 # 开始今日复盘（建 run + 取数）
-    python tools/astock.py next                   # 我现在该做什么？（最重要）
-    python tools/astock.py done <agent>           # 我做完了，校验并推进
-    python tools/astock.py status                 # 进度到哪了
     python tools/astock.py demo                   # 离线示例，不联网
+
+    # ① harness 模式：你在 coding agent 里，一步步走。不花 API 钱
+    python tools/astock.py review                 # 建 run + 取数
+    python tools/astock.py next                   # 我现在该做什么？
+    python tools/astock.py done <agent>           # 我做完了，校验并推进
+
+    # ② api 模式：一条命令跑完，无人值守。用 config/models.yaml 里配的模型
+    python tools/astock.py run                    # 取数 + 五步分析 + 渲染报告
+
+    python tools/astock.py status                 # 进度到哪了
 
 ## 为什么要有这个文件
 
@@ -36,7 +42,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from _common import REPO_ROOT, SCHEMAS, WORKSPACE
+from _common import REPO_ROOT, SCHEMAS, WORKSPACE  # noqa: F401
 
 MODE_STEPS = {
     "close":     ["data-engineer", "market-analyst", "sector-analyst", "news-analyst",
@@ -221,19 +227,73 @@ def cmd_doctor(args) -> None:
           detail=f"{float(eq):,.0f} 元" if eq else "未设置 → 章节⑦只能给比例、给不出金额",
           fix="在 .env 里填账户总资产（本项目会自动读 .env，不用 source）", fatal=False)
 
+    # 执行方式：模型配置是可选的 —— 没有它也能用 next/done 模式跑
+    try:
+        from scripts.llm import load_models_config
+
+        mcfg = load_models_config()
+        has_yaml = (REPO_ROOT / "config" / "models.yaml").is_file()
+        tiers = mcfg.get("tiers") or {}
+        provs = mcfg.get("providers") or {}
+        ready = []
+        for tier, key in tiers.items():
+            raw = provs.get(key) or {}
+            env = raw.get("api_key_env")
+            if not env or os.getenv(env):
+                ready.append(f"{tier}→{key}")
+        if has_yaml and ready:
+            check("模型配置（api 模式）", True, "、".join(ready))
+        elif has_yaml:
+            need = sorted({(provs.get(k) or {}).get("api_key_env")
+                           for k in tiers.values() if (provs.get(k) or {}).get("api_key_env")})
+            check("模型配置（api 模式）", False,
+                  f"models.yaml 在，但缺 API key：{'、'.join(filter(None, need))}",
+                  "在 .env 里填上对应的 key；或者用 astock next/done 让编码 agent 跑（不花 API 钱）",
+                  fatal=False)
+        else:
+            check("模型配置（api 模式）", False, "未配置 → 只能用 next/done 模式",
+                  "想无人值守跑：cp config/models.yaml.example config/models.yaml",
+                  fatal=False)
+    except Exception as e:
+        check("模型配置（api 模式）", False, f"读取失败：{str(e)[:60]}", fatal=False)
+
+    # 代理：这是最常见的"昨天还好好的今天连不上"的原因
+    sys.path.insert(0, str(REPO_ROOT))
+    try:
+        from scripts.ak_client import explain, proxy_summary
+    except Exception:
+        explain, proxy_summary = (lambda e: str(e)), (lambda: "")
+    px = proxy_summary()
+    import urllib.request as _u
+
+    sys_px = sorted({v for k, v in _u.getproxies().items()
+                     if k in ("http", "https", "all") and v})
+    if px or sys_px:
+        check("代理设置", True, f"环境变量 {px or '无'}　系统 {len(sys_px)} 项")
+        say(f"   {_color('→ 东财、新浪都是境内站点，走代理反而更容易失败', C_DIM)}")
+        if sys_px:
+            say(f"   {_color('⚠ macOS 上「系统代理」是独立的一套：', C_DIM)}")
+            say(f"   {_color('  系统设置 → 网络 → Wi-Fi → 详细信息 → 代理 →「网页代理」「SOCKS 代理」', C_DIM)}")
+            say(f"   {_color('  关掉 VPN 客户端不会清掉它，端口失效后所有请求都会卡在这里', C_DIM)}")
+    else:
+        check("代理设置", True, "未设置代理，直连")
+
     # 网络：只有真正连得上 AKShare 才能跑真实复盘
     net_ok, net_detail = False, ""
     try:
-        sys.path.insert(0, str(REPO_ROOT))
         import akshare as ak  # noqa: F401
         from scripts.ak_client import call
 
         df = call("tool_trade_date_hist_sina", cache=False)
         net_ok, net_detail = True, f"交易日历 {len(df)} 条"
     except Exception as e:
-        net_detail = f"{type(e).__name__}: {str(e)[:70]}"
+        # FetchError 里已经带了 explain() 出的诊断，取"原因："那一段
+        msg = str(e)
+        net_detail = (msg.split("原因：", 1)[1] if "原因：" in msg else explain(e))
+        net_detail = " ".join(net_detail.split())[:100]
     check("AKShare 网络连通", net_ok, net_detail,
-          "检查代理/防火墙；连不上就只能跑 astock demo（离线示例）", fatal=False)
+          "跑 python tools/net_check.py 逐个域名定位（DNS？代理？IPv6？）；"
+          "或先看离线示例 python tools/astock.py demo", fatal=False)
 
     say()
     if ok and net_ok:
@@ -255,6 +315,7 @@ def cmd_doctor(args) -> None:
 
 # ── review：开工 ────────────────────────────────────────────────
 def cmd_review(args) -> None:
+    quiet = getattr(args, "quiet", False)
     as_of, note = (args.as_of, "") if args.as_of else default_as_of()
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", as_of):
         die(f"日期格式不合法: {as_of}", "用 YYYY-MM-DD")
@@ -286,8 +347,9 @@ def cmd_review(args) -> None:
             die("取数失败", "看上面的报错。连不上网就先跑 python tools/astock.py demo")
         _finish_step(run_id, "data-engineer")
 
-    say()
-    cmd_next(argparse.Namespace(run_id=run_id, json=False))
+    if not quiet:
+        say()
+        cmd_next(argparse.Namespace(run_id=run_id, json=False))
 
 
 # ── next：我现在该做什么 ────────────────────────────────────────
@@ -522,6 +584,81 @@ def cmd_status(args) -> None:
                     if nxt else _color("已全部完成", C_OK)))
 
 
+# ── run：无人值守跑完全流程 ─────────────────────────────────────
+def cmd_run(args) -> None:
+    """一条命令跑完整条流水线，不需要人坐在终端前。
+
+    与 next/done 循环的区别只有一个：**谁来做那五步判断**。
+    next/done 交给你所在的 coding agent；run 交给 config/models.yaml 里配的 API。
+    角色定义、技能、契约完全共用——这正是把内容与 harness 解耦的回报。
+    """
+    sys.path.insert(0, str(REPO_ROOT))
+    from scripts.agent_runner import run_agent
+    from scripts.llm import Budget, BudgetExceeded, LLMError, load_models_config
+    from scripts.store import repository as store
+
+    cfg = load_models_config()
+    if not (cfg.get("providers") and cfg.get("tiers")):
+        die("没有可用的模型配置",
+            "cp config/models.yaml.example config/models.yaml 并填一个 provider；"
+            "或者用 astock next / done 让你所在的 coding agent 来跑（不花 API 钱）")
+    b = cfg.get("budget") or {}
+    budget = Budget(max_cost=b.get("max_cost_per_run"),
+                    max_tokens=b.get("max_tokens_per_run"))
+
+    # ① 取数（确定性代码，不花 API 钱）
+    cmd_review(argparse.Namespace(as_of=args.as_of, mode=args.mode, no_fetch=args.no_fetch,
+                                  no_cache=args.no_cache, force=args.force, quiet=True))
+    run_id, d, man = resolve_run(None if not args.as_of else f"{args.as_of}_{args.mode}")
+
+    # ② 逐步交给模型
+    steps = []
+    for step in man["steps"]:
+        name = step["agent"]
+        if name in AUTOMATED or step["status"] in ("ok", "blocked"):
+            continue
+        say(_color(f"→ {name} …", C_DIM))
+        try:
+            doc, stat = run_agent(name, d, budget=budget,
+                                  max_attempts=int(b.get("max_attempts_per_agent", 2)),
+                                  cfg=cfg, log=lambda m: say(_color("  " + m, C_DIM)))
+        except BudgetExceeded as e:
+            _mark(run_id, name, "failed", note=str(e)[:200])
+            die(f"预算用尽，已停在 {name}", str(e))
+            return
+        except LLMError as e:
+            _mark(run_id, name, "failed", note=str(e)[:200])
+            say(_color(f"✗ {name} 失败：{e}", C_NO))
+            say("  产物没通过 schema。可以改用 astock next 手工完成这一步，再 astock done 继续")
+            sys.exit(1)
+        store.write_json(d / f"{ARTIFACT_OF[name]}.json", doc)
+        steps.append(stat)
+        if not _finish_step(run_id, name):
+            sys.exit(1)
+        if name == "report-writer":
+            subprocess.run([sys.executable, "tools/render_report.py", "--run-id", run_id],
+                           cwd=REPO_ROOT, check=False)
+            _append_memory(run_id)
+
+    # ③ 把花费如实写进 manifest —— 每天跑的东西，成本必须看得见
+    rep = budget.report()
+    man = read_json(d / "run_manifest.json")
+    man["llm_usage"] = {**rep, "steps": steps}
+    write_json(d / "run_manifest.json", man)
+
+    say()
+    say(_color(f"✓ {run_id} 完成", C_OK))
+    say(f"  报告：workspace/runs/{run_id}/report.md")
+    say(f"  仪表盘：workspace/runs/{run_id}/report.html")
+    say()
+    cost = f"　花费 {rep['cost']}" if rep.get("cost") is not None else ""
+    say(_color(f"  模型调用 {rep['calls']} 次 · "
+               f"输入 {rep['prompt_tokens']:,} + 输出 {rep['completion_tokens']:,} token{cost}",
+               C_DIM))
+    if rep.get("cost_note"):
+        say(_color(f"  （{rep['cost_note']}）", C_DIM))
+
+
 def cmd_demo(args) -> None:
     for cmd in (["tools/make_demo_run.py"], ["tools/render_report.py", "--run-id", EXAMPLE_RUN]):
         r = subprocess.run([sys.executable] + cmd, cwd=REPO_ROOT, capture_output=True, text=True)
@@ -565,6 +702,14 @@ def main() -> None:
     s = sub.add_parser("status", help="进度到哪了")
     s.add_argument("--run-id")
     s.set_defaults(func=cmd_status)
+
+    ru = sub.add_parser("run", help="无人值守跑完全流程（用 config/models.yaml 里配的模型）")
+    ru.add_argument("--as-of", help="分析日 YYYY-MM-DD，默认自动推断")
+    ru.add_argument("--mode", default="close", choices=sorted(MODE_STEPS))
+    ru.add_argument("--no-fetch", action="store_true")
+    ru.add_argument("--no-cache", action="store_true")
+    ru.add_argument("--force", action="store_true")
+    ru.set_defaults(func=cmd_run)
 
     m = sub.add_parser("demo", help="生成离线示例（不联网）")
     m.set_defaults(func=cmd_demo)

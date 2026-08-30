@@ -10,6 +10,7 @@ reads:
 writes:
   - workspace/runs/{run_id}/dataset.json
   - data/{run_id}/*.csv
+dataset_blocks: []   # 不读 dataset
 schema: schemas/dataset.schema.json
 skills: [a-share-market-basics]
 tools: [fetch_dataset, validate_artifact]

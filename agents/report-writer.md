@@ -14,6 +14,7 @@ writes:
   - workspace/runs/{run_id}/report.json
   - workspace/runs/{run_id}/report.md
   - workspace/runs/{run_id}/report.html
+dataset_blocks: []   # 不读 dataset
 schema: schemas/report.schema.json
 skills: [report-writing, risk-discipline]
 tools: [render_report, validate_artifact]

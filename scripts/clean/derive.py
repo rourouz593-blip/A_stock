@@ -18,7 +18,12 @@ def two_market_amount(index_snapshot: list[dict]) -> dict:
     sz = next((i for i in index_snapshot if i["code"] == "399001"), None)
     if not sh or not sz:
         return {"total": None, "note": "缺指数快照，无法计算两市成交额"}
-    total = (sh["amount"] or 0) + (sz["amount"] or 0)
+    if sh.get("amount") is None or sz.get("amount") is None:
+        missing = [i.get("name") for i in (sh, sz) if i.get("amount") is None]
+        return {"total": None, "total_yi": None,
+                "note": f"{'、'.join(missing)} 的成交额缺失（多半用了不返回成交额的备用源），"
+                        f"两市成交额无法计算——**不会用 0 代替**"}
+    total = sh["amount"] + sz["amount"]
     prev = None
     if sh.get("amount_chg_pct") is not None and sz.get("amount_chg_pct") is not None:
         prev_sh = sh["amount"] / (1 + sh["amount_chg_pct"] / 100)

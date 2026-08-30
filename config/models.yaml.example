@@ -1,0 +1,121 @@
+# 模型配置。复制为 models.yaml 后按需修改。
+#
+# ─────────────────────────────────────────────────────────────
+# 两种执行方式，选一种（也可以混着用）
+# ─────────────────────────────────────────────────────────────
+#   harness 模式：你坐在 Claude Code / opencode / Codex 里，
+#                 用 astock next / done 一步步走。**不需要本文件，也不花 API 钱**。
+#   api 模式：    astock run 一条命令跑完全流程，无人值守。
+#                 每天定时跑、或者不想占用编码 agent 的额度时用这个。
+#
+# 一次完整复盘 = 5 次模型调用，提示词合计约 12 万字符
+#   （已按 dataset_blocks 裁剪过；按各家分词器大致 6-8 万输入 token）
+# 具体多少钱看你选哪个模型。astock run 跑完会打印真实用量并写进 run_manifest.json。
+#
+# ─────────────────────────────────────────────────────────────
+# 协议：openai 兼容 或 anthropic 原生。前者能接的服务非常多。
+# ⚠️ base_url 与模型名会变，填之前请对一下服务商的最新文档。
+# ─────────────────────────────────────────────────────────────
+version: 1
+
+providers:
+  # ── 便宜的国产模型（推荐给学生日常跑） ──────────────────────
+  deepseek:
+    protocol: openai
+    base_url: https://api.deepseek.com/v1
+    api_key_env: DEEPSEEK_API_KEY
+    model: deepseek-chat
+    price_per_1m_input: ~     # TODO: 填当前价格才会算钱；不填就只统计 token 用量
+    price_per_1m_output: ~
+    max_tokens: 8000
+    temperature: 0.2
+
+  deepseek-reasoner:
+    protocol: openai
+    base_url: https://api.deepseek.com/v1
+    api_key_env: DEEPSEEK_API_KEY
+    model: deepseek-reasoner
+    price_per_1m_input: ~
+    price_per_1m_output: ~
+    max_tokens: 16000
+    temperature: 0.2
+
+  qwen:
+    protocol: openai
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: DASHSCOPE_API_KEY
+    model: qwen-plus
+    price_per_1m_input: ~
+    price_per_1m_output: ~
+
+  kimi:
+    protocol: openai
+    base_url: https://api.moonshot.cn/v1
+    api_key_env: MOONSHOT_API_KEY
+    model: moonshot-v1-32k
+    price_per_1m_input: ~
+    price_per_1m_output: ~
+
+  glm:
+    protocol: openai
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key_env: ZHIPU_API_KEY
+    model: glm-4-plus
+    price_per_1m_input: ~
+    price_per_1m_output: ~
+
+  # ── 本地模型：零 API 成本，适合教学和反复调试 ────────────────
+  ollama:
+    protocol: openai
+    base_url: http://localhost:11434/v1
+    api_key_env: ~              # 本地不需要 key
+    model: qwen2.5:14b
+    max_tokens: 8000
+    timeout: 600                # 本地推理慢，超时给足
+
+  # ── 聚合路由：一个 key 接一堆模型，适合比较不同模型的效果 ─────
+  openrouter:
+    protocol: openai
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    model: deepseek/deepseek-chat
+
+  # ── 国际厂商 ────────────────────────────────────────────────
+  openai:
+    protocol: openai
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    model: gpt-4o-mini
+
+  anthropic:
+    protocol: anthropic
+    base_url: https://api.anthropic.com
+    api_key_env: ANTHROPIC_API_KEY
+    model: claude-sonnet-4-5
+    max_tokens: 8000
+
+# ─────────────────────────────────────────────────────────────
+# 档位映射：agents/*.md 的 frontmatter 里写的是档位（default / fast / reasoning），
+# 不是具体模型名。所以"哪一步值得用更强的模型"是写在角色定义里的，
+# 换模型只改这三行，不用动任何 agent。
+# ─────────────────────────────────────────────────────────────
+tiers:
+  default: deepseek        # data-engineer / news-analyst
+  fast: deepseek           # 预留：将来做批量或轻量步骤
+  reasoning: deepseek      # market / sector / position / report
+  # 想省钱：三档都用便宜模型
+  # 想要质量：reasoning 换成 deepseek-reasoner / glm / anthropic，其余保持便宜的
+  #          —— 新闻分诊用不上强模型，情绪阶段判断值得用
+
+# ─────────────────────────────────────────────────────────────
+# 预算闸门。**跑飞的循环比跑错的结论更可怕。**
+# ─────────────────────────────────────────────────────────────
+budget:
+  max_tokens_per_run: 400000   # 一次复盘的 token 上限，超了立刻停
+  max_cost_per_run: ~          # 填了价格之后才有意义（单位跟你填的价格一致）
+  max_attempts_per_agent: 2    # 产物不合 schema 时最多重试几次
+
+runtime:
+  include_example_artifact: true   # 把示例产物一起发给模型当结构参考。
+                                   # 关掉能省约 21% 输入 token，但模型少了字段形状参考，
+                                   # 容易缺字段、多重试一轮。便宜模型建议留着

@@ -20,9 +20,25 @@
 | **（上传持仓截图）**「更新我的持仓」「按这个截图跑复盘」 | 见下方「持仓截图导入」，**不要直接手改 positions.yaml** |
 | 「跑到哪了」「继续」 | `python tools/astock.py status` / `next` |
 | 「环境有问题」「跑不起来」 | `python tools/astock.py doctor` |
+| 「自动跑」「定时跑」「别占我的额度」「用便宜模型跑」 | 引导配 `config/models.yaml`，然后 `python tools/astock.py run` |
 | 「给我看看这个系统能出什么」（不联网 / 只是想看效果） | `python tools/astock.py demo` |
 
 **不要自己去查行情，不要凭印象分析，不要手写报告。** 这条流水线已经建好了，你的工作是驱动它。
+
+### 两种执行方式
+
+那五步判断（市场/板块/新闻/持仓/报告）可以由两种执行者来做，
+**角色定义、技能、契约完全共用**：
+
+- **你自己做**（harness 模式）：下面的 `next` / `done` 循环。不需要 API key。
+- **交给 API 做**（api 模式）：`python tools/astock.py run` 一条命令跑完，可无人值守。
+  需要 `config/models.yaml` + `.env` 里的 key。一次复盘约 2.2 万输入 token。
+
+用户没特别说的时候，**你就用 next / done 循环**——那不花额外的钱。
+用户说"自动跑""定时跑""别占我额度"时，才引导他配 api 模式。
+
+两种可以混用：api 模式卡住了，用 `next` 看卡在哪、手工做完那一步、`done` 继续。
+流程状态在 `run_manifest.json` 里，两边看到的是同一份。
 
 ### 唯一需要记住的循环
 

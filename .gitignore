@@ -18,6 +18,7 @@ workspace/cache/
 config/positions.yaml
 config/positions.yaml.bak
 config/thresholds.yaml
+config/models.yaml
 
 # 持仓截图含真实账户信息，绝不入库
 *.png

@@ -8,6 +8,7 @@ reads:
   - workspace/runs/{run_id}/dataset.json
 writes:
   - workspace/runs/{run_id}/market.json
+dataset_blocks: [calendar, index_spot, index_intraday, index_hist, breadth]
 schema: schemas/market.schema.json
 skills: [market-emotion-cycle, intraday-rhythm, a-share-market-basics]
 tools: [validate_artifact]

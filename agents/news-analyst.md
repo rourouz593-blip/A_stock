@@ -9,6 +9,7 @@ reads:
   - memory/runs/
 writes:
   - workspace/runs/{run_id}/news.json
+dataset_blocks: [calendar, news, announcements]
 schema: schemas/news.schema.json
 skills: [news-triage, a-share-market-basics]
 tools: [validate_artifact]
