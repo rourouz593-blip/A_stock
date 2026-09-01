@@ -12,6 +12,7 @@ import json
 import os
 import socket
 import time
+from urllib.parse import urlparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +27,31 @@ RETRY_SLEEP = float(os.getenv("ASTOCK_RETRY_SLEEP", "1.5"))
 # 涨跌家数、板块行情、资金流这些都是**实时快照**，
 # 上午 11 点取的数拿到 15:30 的复盘里用，会得出完全错误的情绪判断。
 CACHE_TTL_MIN = float(os.getenv("ASTOCK_CACHE_TTL_MIN", "30"))
+
+# ⚠️ akshare 里 1000+ 个 requests.get 是**不带 timeout** 的。
+# requests 的默认 timeout 是 None＝无限等——服务器只要不回，进程就一直挂在那里。
+# 对无人值守的系统来说，挂起比报错糟糕得多：报错会被记录、会重试、会上报，
+# 挂起什么都不会发生，你第二天才发现今天没有复盘。
+HTTP_TIMEOUT = (float(os.getenv("ASTOCK_CONNECT_TIMEOUT", "10")),
+                float(os.getenv("ASTOCK_READ_TIMEOUT", "30")))
+
+# 两次请求之间的最小间隔。东财对短时间内的密集请求会直接掐连接，
+# 而"重试"恰恰会制造密集请求——4 个指数 × 3 次重试 × 2 条降级路径，
+# 十几个请求几秒内打过去，等于自己把自己限流了。
+MIN_INTERVAL = float(os.getenv("ASTOCK_MIN_INTERVAL", "0.4"))
+
+# 东财单独加严。依据是 a-stock-data 项目整理的社区实测阈值（2026-05）：
+#   >5 次/秒、单 IP 并发 ≥10、1 分钟 ≥200 次 → 触发风控
+# 以及那份项目里一条一手封禁记录（2026-06-30）：10 线程并发、完全不限流、
+# 1 小时 45000+ 请求 → push2 全系列 IP 级封禁**持续 20 小时以上**。
+# 它们的限流器默认间隔就是 1.0 秒；我们原来的 0.4 秒对东财偏松，跟齐。
+EM_MIN_INTERVAL = float(os.getenv("ASTOCK_EM_MIN_INTERVAL", "1.0"))
+EM_HOSTS = ("eastmoney.com",)
+_last_request_at = 0.0
+
+
+def _interval_for(host: str) -> float:
+    return EM_MIN_INTERVAL if any(h in host for h in EM_HOSTS) else MIN_INTERVAL
 # 少数接口的数据是稳定的，可以长期缓存
 LONG_TTL_CALLS = {"tool_trade_date_hist_sina": 7 * 24 * 60}
 
@@ -38,6 +64,145 @@ CACHE_HITS: list[dict] = []
 
 class FetchError(RuntimeError):
     """取数失败。上层应把对应 block 标为 missing，而不是伪造数据。"""
+
+
+class CooledDown(FetchError):
+    """这个域名正在冷却期，本次**不发请求**。"""
+
+
+# ── 熔断器 ──────────────────────────────────────────────────────
+# 血的教训：连续失败时继续重试，会把自己的 IP 打进对方的限流名单。
+# 一旦被封，连原本正常的主机也会跟着不可达——损失远大于"这次取不到数"。
+#
+# 所以：一个域名连续被拒若干次之后，**在冷却期内一次请求都不发**，
+# 直接失败、让位给备用源。状态落盘，因为用户往往是反复重跑脚本——
+# 只存在内存里的熔断器，一重启就白做了。
+CIRCUIT_FILE = CACHE_DIR / "circuit.json"
+COOLDOWN_MIN = float(os.getenv("ASTOCK_COOLDOWN_MIN", "10"))
+FAILS_TO_TRIP = int(os.getenv("ASTOCK_FAILS_TO_TRIP", "3"))
+
+
+def _circuit() -> dict:
+    if CIRCUIT_FILE.is_file():
+        try:
+            return json.loads(CIRCUIT_FILE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+
+def _save_circuit(c: dict) -> None:
+    CIRCUIT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CIRCUIT_FILE.write_text(json.dumps(c, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def cooling_hosts() -> dict[str, float]:
+    """当前处于冷却期的域名 → 还剩几分钟。"""
+    now = time.time()
+    return {h: round((v["until"] - now) / 60, 1)
+            for h, v in _circuit().items() if v.get("until", 0) > now}
+
+
+def clear_circuit() -> int:
+    n = len(_circuit())
+    if CIRCUIT_FILE.is_file():
+        CIRCUIT_FILE.unlink()
+    return n
+
+
+def _note_failure(host: str) -> None:
+    c = _circuit()
+    e = c.setdefault(host, {"fails": 0, "until": 0})
+    e["fails"] = e.get("fails", 0) + 1
+    if e["fails"] >= FAILS_TO_TRIP:
+        # 连续失败越多，冷却越久：3 次 → 10 分钟，6 次 → 20 分钟，以此类推
+        mult = e["fails"] // FAILS_TO_TRIP
+        e["until"] = time.time() + COOLDOWN_MIN * 60 * mult
+        print(f"[ak_client] {host} 连续 {e['fails']} 次被拒，"
+              f"冷却 {COOLDOWN_MIN * mult:.0f} 分钟——期间不再发请求，直接走备用源。"
+              f"\n           继续硬打只会让封禁范围扩大（这是实测教训）", flush=True)
+    _save_circuit(c)
+
+
+def _note_success(host: str) -> None:
+    c = _circuit()
+    if host in c:
+        c.pop(host)
+        _save_circuit(c)
+
+
+# ── 每日请求预算 ────────────────────────────────────────────────
+# 熔断器解决的是"已经被拒之后别再打"，但它救不了另一种情况：
+# **每个请求都成功，只是数量失控**。8-31 那次就是这样开始的——
+# 前几十个请求全是 200，等到开始被拒时，请求量已经放大了一个数量级。
+#
+# 所以再加一道更笨也更可靠的闸：**一天最多发多少个请求，数满即停**。
+# 它不判断对错、不看返回码、不管是主源还是备用源，只数数。
+#
+# 关键设计：
+#   1. 落盘按日计数——用户往往反复重跑脚本，只存内存等于没有上限
+#   2. 检查放在最底层（patched Session.request 里），任何路径都绕不过
+#   3. 超额直接抛错，**绝不等待、绝不重试**——超额本身就是"今天已经打太多了"
+#   4. 命中缓存的调用根本走不到这里，天然不计数
+BUDGET_FILE = CACHE_DIR / "budget.json"
+MAX_REQUESTS = int(os.getenv("ASTOCK_MAX_REQUESTS", "300"))    # 全部域名合计/天
+MAX_PER_HOST = int(os.getenv("ASTOCK_MAX_PER_HOST", "120"))    # 单域名/天
+_warned_at: set[str] = set()
+
+
+class BudgetExceeded(FetchError):
+    """今日请求预算用尽。不是网络问题，是自我保护。"""
+
+
+def _today() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def budget_state() -> dict:
+    """今日用量。跨日自动归零。"""
+    if BUDGET_FILE.is_file():
+        try:
+            b = json.loads(BUDGET_FILE.read_text(encoding="utf-8"))
+            if b.get("date") == _today():
+                return b
+        except json.JSONDecodeError:
+            pass
+    return {"date": _today(), "total": 0, "hosts": {}}
+
+
+def reset_budget() -> int:
+    """手动清零，返回清掉的请求数。"""
+    n = budget_state()["total"]
+    if BUDGET_FILE.is_file():
+        BUDGET_FILE.unlink()
+    return n
+
+
+def _spend(host: str) -> None:
+    """记一个请求。超额抛 BudgetExceeded——在请求发出**之前**。"""
+    b = budget_state()
+    used_host = b["hosts"].get(host, 0)
+    if b["total"] >= MAX_REQUESTS:
+        raise BudgetExceeded(
+            f"今日请求预算已用尽（{b['total']}/{MAX_REQUESTS}）。\n"
+            f"    这是自我保护，不是网络故障：请求量失控正是被封 IP 的前奏。\n"
+            f"    缺的数据请按 blocked 处理，不要绕过。\n"
+            f"    确认无误要放开：ASTOCK_MAX_REQUESTS=<更大的数>；"
+            f"清零：python tools/astock.py budget --reset")
+    if used_host >= MAX_PER_HOST:
+        raise BudgetExceeded(
+            f"{host} 今日请求已达上限（{used_host}/{MAX_PER_HOST}）。\n"
+            f"    单个域名打太多是被封的直接原因。请换源或按 blocked 处理。\n"
+            f"    放开：ASTOCK_MAX_PER_HOST=<更大的数>")
+    b["total"] += 1
+    b["hosts"][host] = used_host + 1
+    # 到 70% 时提醒一次，让人有机会在撞墙前发现异常
+    if b["total"] == int(MAX_REQUESTS * 0.7) and "total" not in _warned_at:
+        _warned_at.add("total")
+        print(f"[ak_client] 今日已发 {b['total']}/{MAX_REQUESTS} 个请求。"
+              f"一次正常复盘约 30–50 个——数字异常说明有地方在重复取数。", flush=True)
+    BUDGET_FILE.parent.mkdir(parents=True, exist_ok=True)
+    BUDGET_FILE.write_text(json.dumps(b, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def redact_proxy(url: str) -> str:
@@ -94,13 +259,24 @@ REFERERS = {"eastmoney.com": "https://quote.eastmoney.com/",
 
 
 @contextmanager
-def _with_browser_ua():
-    """给 akshare 发出的每个请求补上浏览器请求头。
+def _with_http_defaults(direct: bool = False):
+    """给 akshare 发出的每个请求补它自己不做的几件事。
 
-    只补**调用方没设的**字段：akshare 自己带了 headers 的接口保持原样。
-    这不是伪装身份，是补上一个正常 HTTP 客户端本就该有的 UA——
-    没有 UA 的请求会被很多站点当成扫描器直接断开。
+    1. **超时**——akshare 有一千多个 `requests.get(url, params=...)` 不带 timeout，
+       默认是无限等。挂起对无人值守的系统是最坏的失败：
+       报错会被记录、重试、上报；挂起什么都不会发生。
+    2. **浏览器请求头**——没有 UA 的请求会被东财当成扫描器直接断开。
+       只补调用方没设的字段，akshare 自己带 headers 的接口保持原样。
+    3. **限流**——两次请求之间留最小间隔。密集请求正是"被掐连接"的主因，
+       而重试机制恰恰会制造密集请求。
+    4. **direct 时置 `trust_env=False`**——这才是"彻底不走代理"的正解。
+
+       为什么光删环境变量不够：requests 的 `trust_env` 打开时，
+       会去读 http_proxy/https_proxy/all_proxy、**macOS 系统偏好设置里的代理**、
+       甚至 `~/.netrc`。删掉 shell 变量只堵住了第一条路。
+       `trust_env=False` 是一刀切，三条路一起断。
     """
+    global _last_request_at
     try:
         import requests.sessions as rs
     except ImportError:
@@ -110,6 +286,22 @@ def _with_browser_ua():
     orig = rs.Session.request
 
     def patched(self, method, url, **kw):
+        global _last_request_at
+        host = urlparse(str(url)).hostname or "?"
+        left = cooling_hosts().get(host)
+        if left and os.getenv("ASTOCK_IGNORE_COOLDOWN") != "1":
+            raise CooledDown(
+                f"{host} 正在冷却，还剩 {left:.0f} 分钟（连续被拒后自动触发）。\n"
+                f"    继续硬打只会扩大封禁范围。想强行试：ASTOCK_IGNORE_COOLDOWN=1；"
+                f"想清空：python tools/astock.py cooldown --clear")
+        _spend(host)                    # 超额在这里抛错——请求还没发出去
+        if direct:
+            self.trust_env = False      # 无视一切 shell / 系统 / netrc 配置
+        gap, need = time.time() - _last_request_at, _interval_for(host)
+        if gap < need:
+            time.sleep(need - gap)
+        _last_request_at = time.time()
+
         headers = dict(kw.get("headers") or {})
         for k, v in BROWSER_HEADERS.items():
             headers.setdefault(k, v)
@@ -118,13 +310,25 @@ def _with_browser_ua():
                 headers.setdefault("Referer", ref)
                 break
         kw["headers"] = headers
-        return orig(self, method, url, **kw)
+        if kw.get("timeout") is None:      # 只在调用方没设时才补
+            kw["timeout"] = HTTP_TIMEOUT
+        try:
+            resp = orig(self, method, url, **kw)
+        except Exception as e:
+            if _is_dropped(e) or _is_conn_error(e):
+                _note_failure(host)
+            raise
+        _note_success(host)
+        return resp
 
     rs.Session.request = patched
     try:
         yield
     finally:
         rs.Session.request = orig
+
+
+_with_browser_ua = _with_http_defaults      # 旧名字保留，免得引用处漏改
 
 
 @contextmanager
@@ -187,6 +391,8 @@ def _is_proxy_error(e: Exception) -> bool:
 
 def diagnose(e: Exception) -> str:
     """给出一句人能照着做的诊断。拿不准就返回空串。"""
+    if isinstance(e, CooledDown):
+        return str(e)
     txt = f"{type(e).__name__}: {e}"
     if _is_proxy_error(e):
         px = proxy_summary() or "（系统代理）"
@@ -268,7 +474,10 @@ def call(name: str, params: dict[str, Any] | None = None, *, cache: bool = True)
     direct = os.getenv("ASTOCK_DIRECT") == "1"
     ipv4_only = os.getenv("ASTOCK_IPV4_ONLY") == "1"
     last_err: Exception | None = None
+    max_retry = MAX_RETRY
     for attempt in range(1, MAX_RETRY + 1):
+        if attempt > max_retry:
+            break
         try:
             with _base_ctx(direct, ipv4_only):
                 df = fn(**params)
@@ -278,12 +487,16 @@ def call(name: str, params: dict[str, Any] | None = None, *, cache: bool = True)
                 cache_file.parent.mkdir(parents=True, exist_ok=True)
                 df.to_csv(cache_file, index=False)
             return df
+        except CooledDown:
+            raise      # 冷却期：一次请求都不发，也不重试
         except FetchError:
             raise
         except Exception as e:  # 网络/限流/接口变更
             last_err = e
             # 连不上时依次尝试两种降级：① 绕开代理　② 只走 IPv4
-            for label, ctx, hint in _fallbacks(e, direct, ipv4_only):
+            # 403 不走降级——换个出口 IP 试探正是风控最讨厌的行为
+            for label, ctx, hint in ([] if _is_waf(e)
+                                     else _fallbacks(e, direct, ipv4_only)):
                 try:
                     with ctx():
                         df = fn(**params)
@@ -295,9 +508,20 @@ def call(name: str, params: dict[str, Any] | None = None, *, cache: bool = True)
                         return df
                 except Exception as e2:
                     last_err = e2
-            if attempt < MAX_RETRY:
-                time.sleep(RETRY_SLEEP * attempt)
-    raise FetchError(f"{name} 取数失败（重试 {MAX_RETRY} 次）\n    原因：{explain(last_err)}")
+            if _is_waf(e):
+                # 风控明确拒绝：立刻停手。重试改变不了结果，只会加重封禁。
+                raise FetchError(
+                    f"{name} 被风控拒绝（403）。这不是网络问题，重试无用。"
+                    f"\n    等几分钟再试，或换备用源。"
+                    f"\n    原因：{explain(e)}") from e
+            if _is_dropped(e):
+                # 限流信号：退避加长，但**总次数收紧**——
+                # 死磕这个源不如快点退到备用源，多打的每一次都在加重限流
+                max_retry = min(max_retry, int(os.getenv("ASTOCK_DROP_RETRY", "2")))
+            if attempt < max_retry:
+                time.sleep(RETRY_SLEEP * attempt * (4 if _is_dropped(e) else 1))
+    raise FetchError(f"{name} 取数失败（重试 {min(MAX_RETRY, max_retry)} 次）"
+                     f"\n    原因：{explain(last_err)}")
 
 
 @contextmanager
@@ -312,7 +536,7 @@ def _base_ctx(direct: bool, ipv4: bool, ua: bool = True):
         ua = False
     with (_without_proxy() if direct else _nullcontext()):
         with (_ipv4_only() if ipv4 else _nullcontext()):
-            with (_with_browser_ua() if ua else _nullcontext()):
+            with (_with_http_defaults(direct) if ua else _nullcontext()):
                 yield
 
 
@@ -329,6 +553,18 @@ def _is_dropped(e: Exception) -> bool:
                                   "ConnectionResetError", "Connection reset"))
 
 
+def _is_waf(e: Exception) -> bool:
+    """403：这是风控在说"不"，不是网络出问题。
+
+    区别很重要——**403 重试没有任何意义，只会加重风控**。
+    连接错误重试可能成功（对方在抖动），403 重试一定不成功（对方在拒绝你），
+    而且每一次都在给封禁计数加分。
+    见 memory/knowledge/akshare-gotchas.md「403 与断连是两回事」。
+    """
+    txt = f"{type(e).__name__}: {e}"
+    return "403" in txt or "Forbidden" in txt
+
+
 def _fallbacks(e: Exception, direct: bool, ipv4: bool):
     """连不上时该按什么顺序降级重试。
 
@@ -337,21 +573,23 @@ def _fallbacks(e: Exception, direct: bool, ipv4: bool):
     用户会以为一切正常，却不知道数据是用另一条路取的。
     """
     out = []
+    has_proxy = bool(proxy_env())      # 压根没配代理就别试"绕开代理"，那是白打请求
     if _is_proxy_error(e) and not direct:
         out.append(("绕开代理", _without_proxy,
                     "建议关掉代理或设 ASTOCK_DIRECT=1"))
     if _is_dropped(e):
-        # 连上了却被掐 —— 先怀疑代理线路，再怀疑站点限流
-        if not direct:
+        # 连上了却被掐：有代理就先怀疑线路；没代理就是站点在限流，
+        # **这时候多试几条路等于加重限流**，什么都不做、快点退到备用源才是对的
+        if has_proxy and not direct:
             out.append(("绕开代理", _without_proxy,
                         "服务器主动断开，多半是代理线路把境内站点绕出去了；"
                         "建议 ASTOCK_DIRECT=1"))
-            out.append(("绕开代理 + 仅 IPv4", lambda: _base_ctx(True, True),
-                        "建议 ASTOCK_DIRECT=1 ASTOCK_IPV4_ONLY=1"))
-    if _is_conn_error(e) and not ipv4:
+    # 注意：`Connection aborted`（被掐）也含 "Connection" 字样，但它**不是连通性问题**，
+    # 换 IPv4 毫无帮助，只会多打一次请求、加重限流。所以这里要把它排除掉。
+    if _is_conn_error(e) and not _is_dropped(e) and not ipv4:
         out.append(("改用仅 IPv4", _ipv4_only,
                     "你的网络 IPv6 出口可能是坏的，建议设 ASTOCK_IPV4_ONLY=1"))
-        if not direct:
+        if has_proxy and not direct:
             out.append(("绕开代理 + 仅 IPv4",
                         lambda: _base_ctx(True, True),
                         "建议同时设 ASTOCK_DIRECT=1 ASTOCK_IPV4_ONLY=1"))

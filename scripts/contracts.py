@@ -52,6 +52,9 @@ class Provenance:
     params: dict[str, Any] = field(default_factory=dict)
     unit: Optional[str] = None                    # 如 "CNY_yuan"
     fallback_from: Optional[str] = None
+    # 哪些标的是从本地仓库读的（＝这次没发请求）。
+    # 记下来是为了可追溯：报告里"今天的数"到底是刚取的还是存量，必须能查。
+    from_store: Optional[list] = None
     field_mapping: dict[str, str] = field(default_factory=dict)
 
 

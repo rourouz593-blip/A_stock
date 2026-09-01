@@ -1,0 +1,31 @@
+# 每类数据按什么顺序试哪个源。改这里，不用改代码。
+#
+# 排序原则（ADR-0004 §3.5，来自 a-stock-data 的实测结论）：
+#   能用通达信/腾讯，就别用东财；东财只留给它独有、别处拿不到的数据。
+#
+# 不是因为东财数据差，是因为**东财会封 IP，腾讯不会**（腾讯是限流，降速即恢复）。
+# 把每天都要跑的批量请求挪走，等于把风险最高的那部分请求量清零。
+#
+# 临时改：ASTOCK_PROVIDER_SPOT=eastmoney python tools/astock.py review
+
+datasets:
+  # 实时/收盘快照：腾讯一次请求批量拿全部标的，东财要逐个拉。
+  # 持仓 10 只 → 腾讯 1 个请求 vs 东财 10 个。这是请求量差距最大的一块。
+  spot: [tencent, eastmoney]
+
+  # 指数日线：东财有成交额，腾讯的成交额字段本地无法联网核对，
+  # 所以暂时不动。核对方法见 tools/verify_provider.py。
+  index_daily: [eastmoney, sina]
+
+  # 个股日线：历史走本地仓库，只有缺的那几天才联网。
+  stock_daily: [eastmoney]
+
+# 东财独有、别处确实拿不到的（不要试图给它们配备胎，会得到口径不同的假数据）：
+#   涨停/炸板/跌停池的完整四池 · 板块资金流 · 龙虎榜席位 · 融资融券 · 解禁日历
+# 其中「涨停梯队」有同花顺独立备胎（ADR-0004 §3.4），炸板率没有。
+eastmoney_only:
+  - limit_pool_full
+  - sector_flow
+  - dragon_tiger
+  - margin
+  - unlock_calendar

@@ -59,6 +59,44 @@ def _from_sina(code: str, as_of: str, lookback_days: int):
     df["成交额"] = float("nan")          # 新浪不给，如实留空
     return df[["日期", "开盘", "收盘", "最高", "最低", "成交量", "成交额", "振幅", "涨跌幅"]]
 
+# ── 本地仓库（已收盘的日子只取一次）──────────────────────────────
+# 见 scripts/store/bars.py 的模块文档。这里只做三件事：
+#   ① 问仓库要不要发请求　② 发完把结果存回去　③ 仓库坏了不能拖垮复盘
+_STORE_WARNED = False
+
+
+def _store():
+    """拿到仓库模块；任何异常都退化成"没有仓库"，绝不阻断取数。
+
+    仓库是**优化**，不是依赖。SQLite 建不起来（只读目录、网络盘、
+    磁盘满）时，正确的行为是照常联网取数，而不是让整份复盘挂掉。
+    """
+    global _STORE_WARNED
+    try:
+        from ..store import bars
+
+        bars.connect().close()
+        return bars
+    except Exception as e:
+        if not _STORE_WARNED:
+            _STORE_WARNED = True
+            print(f"[market] 本地仓库不可用，本次全部走网络：{str(e)[:100]}", flush=True)
+        return None
+
+
+def _want_days(as_of: str, lookback_days: int, trading_days=None):
+    """这次需要哪些交易日。
+
+    **没有交易日历就返回 None（＝不启用仓库）**——
+    因为判断"缺不缺"必须按交易日算，用日期减法会把节假日当成永远的缺口，
+    每次复盘都去重取，仓库反而变成新的请求放大器。
+    宁可不优化，也不要错误地优化。
+    """
+    if not trading_days:
+        return None
+    past = sorted([d for d in trading_days if d <= as_of], reverse=True)
+    return set(past[:lookback_days]) or None
+
 # 日内四段（章节二要求），左闭右开
 SESSIONS = [
     ("早盘", "09:30", "10:30"),
@@ -68,14 +106,35 @@ SESSIONS = [
 ]
 
 
-def fetch_index_daily(as_of: str, lookback_days: int = 60) -> DataBlock:
-    """四大指数的日线。开收高低涨跌幅成交额全部来自这里（收盘后的权威口径）。"""
+def fetch_index_daily(as_of: str, lookback_days: int = 60,
+                      trading_days=None) -> DataBlock:
+    """四大指数的日线。开收高低涨跌幅成交额全部来自这里（收盘后的权威口径）。
+
+    `trading_days`：交易日历（build_dataset 会传）。给了就启用本地仓库——
+    仓库里已经齐全的指数**一个请求都不发**。不给就照常全部走网络。
+    """
     import pandas as pd
 
     start = (pd.Timestamp(as_of) - pd.Timedelta(days=lookback_days * 2)).strftime("%Y%m%d")
     frames, flags = [], []
     fallback_from = None
+    store, want = _store(), _want_days(as_of, lookback_days, trading_days)
+    from_store = []
     for code, meta in CORE_INDEXES.items():
+        degraded = None
+        # ① 仓库里齐了就直接用——已收盘的日线不会变，没有任何理由再取一次
+        if store and want:
+            try:
+                if not store.missing_dates("index_daily", code, want):
+                    rows = store.load("index_daily", code, min(want), max(want))
+                    df = pd.DataFrame(rows)
+                    df["指数代码"] = code
+                    df["指数名称"] = meta["name"]
+                    frames.append(df)
+                    from_store.append(code)
+                    continue
+            except Exception as e:
+                print(f"[market] 读仓库失败，改走网络：{str(e)[:80]}", flush=True)
         try:
             with _skip_index_code_map():
                 df = call(
@@ -88,12 +147,25 @@ def fetch_index_daily(as_of: str, lookback_days: int = 60) -> DataBlock:
             print(f"[market] 东财取 {meta['name']} 失败，改用新浪备用源：{str(e)[:120]}",
                   flush=True)
             df = _from_sina(code, as_of, lookback_days)
-            fallback_from = "akshare.index_zh_a_hist"
+            fallback_from = degraded = "akshare.index_zh_a_hist"
             flags.append(QualityFlag(
                 "index_hist", "warning",
                 f"{meta['name']} 用了新浪备用源，**成交额缺失**——"
                 f"章节①的两市成交额将无法计算"))
         df = df.copy()
+        # ② 存回仓库。未收盘的当天会被 bars.save 自己挡掉，这里不用判断。
+        #
+        # **降级源的数据不入库**：新浪那条路没有成交额，一旦存进去，
+        # 以后每次都会命中仓库、再也不会回头去问东财，
+        # 于是"某天临时降级"被永久固化成了"那天就是没有成交额"。
+        # 缺一次可以补，存错了不会自己好。
+        if store and not degraded:
+            try:
+                store.save("index_daily", code, df.to_dict("records"),
+                           source="akshare.index_zh_a_hist" if not fallback_from
+                           else "akshare.stock_zh_index_daily")
+            except Exception as e:
+                print(f"[market] 写仓库失败（不影响本次复盘）：{str(e)[:80]}", flush=True)
         df["指数代码"] = code
         df["指数名称"] = meta["name"]
         frames.append(df)
@@ -117,6 +189,7 @@ def fetch_index_daily(as_of: str, lookback_days: int = 60) -> DataBlock:
             params={"symbols": list(CORE_INDEXES), "period": "daily"},
             unit="CNY_yuan",
             fallback_from=fallback_from,
+            from_store=from_store or None,
         ),
         flags=flags,
     ), all_df
@@ -171,20 +244,48 @@ def fetch_index_intraday(as_of: str) -> DataBlock:
     import pandas as pd
 
     frames, flags, sessions = [], [], {}
+    store, from_store = _store(), []
     for code, meta in CORE_INDEXES.items():
-        with _skip_index_code_map():
-            df, err = try_call(
-                "index_zh_a_hist_min_em",
-                {
-                    "symbol": code,
-                    "period": "1",
-                    "start_date": f"{as_of} 09:15:00",
-                    "end_date": f"{as_of} 15:05:00",
-                },
-            )
-        if df is None or len(df) == 0:
-            flags.append(QualityFlag("index_intraday", "warning", f"{meta['name']} 分时数据取不到: {err}"))
-            continue
+        # ① 先问仓库。分时这一块的仓库价值比日线还大：
+        #    东财只保留最近几个交易日，**过了窗口就再也取不到了**。
+        #    存下来不只是省请求，是让"复盘上个月某一天"这件事从不可能变成可能。
+        df = None
+        if store:
+            try:
+                got = store.load("index_intraday", code, as_of, as_of)
+                if got and got[0].get("rows"):
+                    import pandas as _pd
+
+                    df = _pd.DataFrame(got[0]["rows"])
+                    from_store.append(code)
+            except Exception as e:
+                print(f"[market] 读分时仓库失败，改走网络：{str(e)[:80]}", flush=True)
+        if df is None:
+            with _skip_index_code_map():
+                df, err = try_call(
+                    "index_zh_a_hist_min_em",
+                    {
+                        "symbol": code,
+                        "period": "1",
+                        "start_date": f"{as_of} 09:15:00",
+                        "end_date": f"{as_of} 15:05:00",
+                    },
+                )
+            if df is None or len(df) == 0:
+                flags.append(QualityFlag(
+                    "index_intraday", "warning",
+                    f"{meta['name']} 分时数据取不到: {err}"))
+                continue
+            # ② 存回仓库。整天的分钟线打包成一行——
+            #    仓库的键是"哪一天"，不是"哪一分钟"
+            if store:
+                try:
+                    store.save("index_intraday", code,
+                               [{"日期": as_of, "rows": df.to_dict("records")}],
+                               source="akshare.index_zh_a_hist_min_em")
+                except Exception as e:
+                    print(f"[market] 写分时仓库失败（不影响本次复盘）：{str(e)[:80]}",
+                          flush=True)
         df = df.copy()
         df["指数代码"] = code
         df["指数名称"] = meta["name"]
@@ -210,6 +311,7 @@ def fetch_index_intraday(as_of: str) -> DataBlock:
             source="akshare.index_zh_a_hist_min_em",
             fetched_at=now_iso(),
             params={"date": as_of, "period": "1"},
+            from_store=from_store or None,
         ),
         flags=flags,
     ), all_df

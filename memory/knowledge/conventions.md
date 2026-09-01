@@ -18,3 +18,20 @@
 | 明细存储 | CSV（`utf-8-sig`，Excel 打开不乱码），不用 parquet | ✅ 已定 |
 | 情绪阶段阈值 | 见 `config/thresholds.yaml` | ⬜ 待填 |
 | 板块强弱阈值 | 见 `config/thresholds.yaml` | ⬜ 待填 |
+
+## 落盘状态必须在 conftest 里隔离（2026-09-01）
+
+`workspace/cache/` 下的 `budget.json`（每日请求预算）和 `circuit.json`（熔断冷却）
+是**跨进程持久化**的。测试里如果不改指到 `tmp_path`，读到的是这台机器的真实状态。
+
+后果不是"测试偶尔失败"，而是**失败信息会骗人**：
+`test_browser_ua_is_injected` 曾因为 push2his 正在冷却而失败，
+报错是 `CooledDown`，和它要测的 UA 注入毫无关系——
+一个新人看到这个会去查 UA 代码，查半天。
+
+规则：**新增任何落盘状态，同一次改动里就要在 `tests/conftest.py` 的
+`_isolate_persistent_state` 里加一行。** 目前隔离的：
+
+- `ak_client.BUDGET_FILE`
+- `ak_client.CIRCUIT_FILE`
+- `store.bars.DB_PATH`（在各自的 fixture 里，因为多数测试不碰仓库）

@@ -278,6 +278,53 @@ def cmd_doctor(args) -> None:
     else:
         check("代理设置", True, "未设置代理，直连")
 
+    # 熔断：被限流的域名会进冷却期，这是"今天怎么什么都取不到"的常见原因
+    try:
+        from scripts.ak_client import cooling_hosts
+
+        cooling = cooling_hosts()
+        if cooling:
+            check("数据源冷却中", False,
+                  "、".join(f"{h}({m:.0f}分钟)" for h, m in list(cooling.items())[:3]),
+                  "连续被拒后自动触发，期间不发请求。python tools/astock.py cooldown 看详情",
+                  fatal=False)
+        else:
+            check("数据源冷却中", True, "无")
+    except Exception:
+        pass
+
+    # 请求预算：数量失控是被封 IP 的前奏，比"已经被拒"更早能看见
+    try:
+        from scripts.ak_client import MAX_REQUESTS, budget_state
+
+        b = budget_state()
+        pct = b["total"] / MAX_REQUESTS if MAX_REQUESTS else 0
+        top = max(b["hosts"].items(), key=lambda kv: kv[1], default=None)
+        detail = f"今日 {b['total']}/{MAX_REQUESTS} 个请求"
+        if top:
+            detail += f"，最多的是 {top[0]}（{top[1]} 个）"
+        check("请求预算", pct < 0.9, detail,
+              "一次正常复盘约 30–50 个。快满说明有地方在重复取数，"
+              "先查缓存再放大上限：python tools/astock.py budget",
+              fatal=False)
+    except Exception:
+        pass
+
+    # 本地仓库：命中越多，越不需要联网，也就越不容易被封
+    try:
+        from scripts.store import bars
+
+        rows = bars.stats()
+        if rows:
+            total = sum(r["n_rows"] for r in rows)
+            check("本地仓库", True,
+                  f"{len(rows)} 个数据集 / {total} 行 / {bars.db_size_mb()} MB")
+        else:
+            check("本地仓库", True, "空（跑一次 review 就会开始积累）")
+    except Exception as e:
+        check("本地仓库", False, str(e)[:60],
+              "仓库不可用不影响复盘，只是每次都要重新联网取数", fatal=False)
+
     # 网络：只有真正连得上 AKShare 才能跑真实复盘
     net_ok, net_detail = False, ""
     try:
@@ -659,6 +706,124 @@ def cmd_run(args) -> None:
         say(_color(f"  （{rep['cost_note']}）", C_DIM))
 
 
+def cmd_cooldown(args) -> None:
+    """看/清 熔断状态。
+
+    一个域名连续被拒之后会进冷却期，期间**一次请求都不发**——
+    因为继续硬打只会让对方扩大封禁范围（实测教训）。
+    """
+    sys.path.insert(0, str(REPO_ROOT))
+    from scripts.ak_client import clear_circuit, cooling_hosts
+
+    if args.clear:
+        n = clear_circuit()
+        say(_color(f"✓ 已清空 {n} 条冷却记录", C_OK))
+        say(_color("  提醒：如果对方还在封，清空只会让你更快地再被封一次。"
+                   "先确认能连上再清。", C_DIM))
+        return
+    cooling = cooling_hosts()
+    if not cooling:
+        say(_color("✓ 没有域名处于冷却期", C_OK))
+        return
+    say(_color(f"{len(cooling)} 个域名正在冷却（期间不发请求，直接走备用源）：", C_B))
+    for host, left in sorted(cooling.items(), key=lambda kv: -kv[1]):
+        say(f"  {host:<32} 还剩 {left:.0f} 分钟")
+    say()
+    say(_color("  想强行试：ASTOCK_IGNORE_COOLDOWN=1 python tools/astock.py review", C_DIM))
+    say(_color("  想清空：  python tools/astock.py cooldown --clear", C_DIM))
+
+
+def cmd_budget(args) -> None:
+    """看/清 今日请求预算。
+
+    熔断器管的是"被拒之后别再打"，预算管的是"每个都成功但数量失控"——
+    后者才是被封的开始。一次正常复盘约 30–50 个请求，
+    数字远超这个量级，说明有地方在重复取数，而不是该调大上限。
+    """
+    sys.path.insert(0, str(REPO_ROOT))
+    from scripts.ak_client import MAX_PER_HOST, MAX_REQUESTS, budget_state, reset_budget
+
+    if args.reset:
+        n = reset_budget()
+        say(_color(f"✓ 已清零今日计数（原本 {n} 个请求）", C_OK))
+        say(_color("  提醒：清零不会让对方忘记你今天打过多少。"
+                   "如果是因为撞上限才清，先想清楚为什么会打这么多。", C_DIM))
+        return
+
+    b = budget_state()
+    pct = b["total"] / MAX_REQUESTS if MAX_REQUESTS else 0
+    color = C_OK if pct < 0.7 else C_B
+    say(_color(f"今日请求：{b['total']} / {MAX_REQUESTS}"
+               f"（{pct:.0%}）", color))
+    say(_color(f"参考：一次正常复盘约 30–50 个请求", C_DIM))
+    say()
+    if b["hosts"]:
+        say(_color("按域名：", C_B))
+        for host, n in sorted(b["hosts"].items(), key=lambda kv: -kv[1]):
+            bar = "█" * min(28, int(n / max(1, MAX_PER_HOST) * 28))
+            flag = _color("  ← 已达单域名上限", C_NO) if n >= MAX_PER_HOST else ""
+            say(f"  {host:<28} {n:>4} / {MAX_PER_HOST}  {bar}{flag}")
+    else:
+        say(_color("  今天还没发过请求", C_DIM))
+    say()
+    say(_color("  放大上限：ASTOCK_MAX_REQUESTS=600 ASTOCK_MAX_PER_HOST=200 ...", C_DIM))
+    say(_color("  清零计数：python tools/astock.py budget --reset", C_DIM))
+
+
+def cmd_check(args) -> None:
+    """逐块体检。和 doctor 的分工：doctor 查环境，check 查数据。"""
+    cmd = [sys.executable, "tools/fetch_check.py"]
+    if args.as_of:
+        cmd += ["--as-of", args.as_of]
+    if args.only:
+        cmd += ["--only"] + list(args.only)
+    if args.json:
+        cmd += ["--json"]
+    raise SystemExit(subprocess.run(cmd, cwd=REPO_ROOT).returncode)
+
+
+def cmd_store(args) -> None:
+    """看/清 本地行情仓库。
+
+    仓库存的是**已收盘的交易日**——那些数据永远不会再变，
+    所以没有 TTL，只取一次。缓存省的是这一次请求，仓库省的是以后所有次。
+    """
+    sys.path.insert(0, str(REPO_ROOT))
+    from scripts.store import bars
+
+    if args.purge is not None:
+        n = bars.purge(args.purge or None)
+        what = f"数据集 {args.purge}" if args.purge else "整个仓库"
+        say(_color(f"✓ 已清空{what}（{n} 行）", C_OK))
+        say(_color("  删了也没关系，下次复盘会重新取，只是多花几个请求。", C_DIM))
+        return
+
+    try:
+        rows = bars.stats()
+    except Exception as e:
+        say(_color(f"✗ 仓库打不开：{str(e)[:120]}", C_NO))
+        say(_color(f"  位置：{bars.DB_PATH}", C_DIM))
+        say(_color("  常见原因：仓库落在了网络盘 / 同步盘 / 只读目录上——"
+                   "SQLite 在这些文件系统上会报 disk I/O error。", C_DIM))
+        say(_color("  换个位置：ASTOCK_HISTORY_DB=~/astock-history.sqlite", C_DIM))
+        say(_color("  仓库不可用不影响复盘，只是每次都要重新联网取数。", C_DIM))
+        return
+    if not rows:
+        say(_color("仓库还是空的——跑一次 review 就会开始积累。", C_DIM))
+        say(_color(f"  位置：{bars.DB_PATH}", C_DIM))
+        return
+    say(_color(f"本地行情仓库（{bars.db_size_mb()} MB）", C_B))
+    say(_color(f"  {bars.DB_PATH}", C_DIM))
+    say()
+    say(f"  {'数据集':<18}{'标的':>6}{'行数':>8}   覆盖区间")
+    for r in rows:
+        say(f"  {r['dataset']:<18}{r['symbols']:>6}{r['n_rows']:>8}   "
+            f"{r['first']} → {r['last']}")
+    say()
+    say(_color("  这些日子已经存下来了，之后的复盘不会再为它们发请求。", C_DIM))
+    say(_color("  清空：python tools/astock.py store --purge", C_DIM))
+
+
 def cmd_demo(args) -> None:
     for cmd in (["tools/make_demo_run.py"], ["tools/render_report.py", "--run-id", EXAMPLE_RUN]):
         r = subprocess.run([sys.executable] + cmd, cwd=REPO_ROOT, capture_output=True, text=True)
@@ -711,11 +876,36 @@ def main() -> None:
     ru.add_argument("--force", action="store_true")
     ru.set_defaults(func=cmd_run)
 
+    cd = sub.add_parser("cooldown", help="看/清 被限流域名的冷却状态")
+    cd.add_argument("--clear", action="store_true", help="清空冷却记录")
+    cd.set_defaults(func=cmd_cooldown)
+
+    ck = sub.add_parser("check", help="逐块体检：哪些数据能取到、哪些不能")
+    ck.add_argument("--as-of", default=None)
+    ck.add_argument("--only", nargs="*")
+    ck.add_argument("--json", action="store_true")
+    ck.set_defaults(func=cmd_check)
+
+    st = sub.add_parser("store", help="看/清 本地行情仓库（已收盘的日子只取一次）")
+    st.add_argument("--purge", nargs="?", const="", default=None,
+                    metavar="数据集", help="清空仓库；给数据集名则只清那一个")
+    st.set_defaults(func=cmd_store)
+
+    bg = sub.add_parser("budget", help="看/清 今日请求预算（防止请求量失控）")
+    bg.add_argument("--reset", action="store_true", help="清零今日计数")
+    bg.set_defaults(func=cmd_budget)
+
     m = sub.add_parser("demo", help="生成离线示例（不联网）")
     m.set_defaults(func=cmd_demo)
 
     args = p.parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except KeyboardInterrupt:
+        say()
+        say(_color("⌁ 已中断。进度都在 run_manifest.json 里，"
+                   "下次 astock next 会从断的地方接着来。", C_DIM))
+        sys.exit(130)
 
 
 if __name__ == "__main__":

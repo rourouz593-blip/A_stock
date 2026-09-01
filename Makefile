@@ -17,6 +17,15 @@ setup:  ## 安装依赖并从 example 生成个人配置
 doctor:  ## 环境自检：依赖、配置、网络
 	$(PY) tools/astock.py doctor
 
+check:  ## 逐块体检：哪些数据能取到、哪些不能（不跑完整流水线）
+	$(PY) tools/astock.py check
+
+budget:  ## 今日请求用量
+	$(PY) tools/astock.py budget
+
+store:  ## 本地行情仓库存了什么
+	$(PY) tools/astock.py store
+
 review:  ## 跑今日复盘（建 run + 取数 + 进入循环）
 	$(PY) tools/astock.py review
 
@@ -40,4 +49,4 @@ clean:  ## 清掉缓存与非示例的 run
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
 	find workspace/runs -maxdepth 1 -mindepth 1 -type d ! -name '*_example' -exec rm -rf {} +
 
-.PHONY: help setup doctor review next status demo sync test clean
+.PHONY: help setup doctor check budget store review next status demo sync test clean

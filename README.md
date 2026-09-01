@@ -283,6 +283,8 @@ A-stock/
 ├── tools/                       ③ 九个 CLI 工具（全部已实现）
 │   ├── astock.py                    ★ 统一入口 + 状态机 + api 模式执行器
 │   ├── sync_harness.py              生成各 harness 的适配层
+│   ├── net_check.py                 逐域名连通性诊断（DNS/代理/IPv6/站点）
+│   ├── net_probe.py                 同域名七种打法对照，定位库层差异
 │   ├── fetch_dataset.py             AKShare 取数
 │   ├── import_positions.py          截图 → positions.yaml（带算术自检）
 │   ├── compute_risk.py              仓位与单笔风险
@@ -455,9 +457,14 @@ stop_level: 11.50                                        # 破了就承认判断
 | `ProxyError ... 127.0.0.1:xxxx Connection refused` | **开着代理但代理客户端没运行**（VPN 关了、代理设置还在） | 三选一：开代理客户端 / `unset http_proxy https_proxy all_proxy` / `ASTOCK_DIRECT=1` |
 | 上面三招都试了还是报代理错 | macOS 的**系统代理**独立于环境变量，VPN 退出时不会清掉 | 系统设置 → 网络 → Wi-Fi → 详细信息 → 代理 → 关掉「网页代理」和「SOCKS 代理」 |
 | 第一步交易日历秒过、第二步却连不上 | 日历命中了本地缓存，看起来"网络是好的" | 缓存已加 30 分钟 TTL；`--no-cache` 可强制重取 |
+| 同一个域名，`net_check` 通但 `astock` 不通 | 两者用的 HTTP 库不同（urllib vs requests），差异可能在代理解析、压缩协商、连接复用 | **跑 `python tools/net_probe.py`**——七种打法各试一次，直接指出是哪一维 |
 | `AKShare 网络连通` 失败，直连也不行 | 可能是 DNS、系统代理、或 **IPv6 出口坏掉** | **先跑 `python tools/net_check.py`**——它逐个域名测 DNS(A/AAAA) / 当前设置 / 强制直连 / 仅 IPv4，直接告诉你是哪一类 |
 | 新浪能连、东财连不上 | 典型的 IPv6 出口故障：有 AAAA 记录的站点超时 | `ASTOCK_IPV4_ONLY=1 python tools/astock.py review`（系统也会自动降级重试） |
 | `ConnectTimeout` 在 `80.push2.eastmoney.com` | akshare 取指数 K 线前会先向这台机器拉一张**多余的**对照表，而东财各分片主机可达性差别很大 | 已绕开（市场号写死在 `INDEX_MARKET_ID`）；东财整体不通时退到新浪，但成交额会缺失 |
+| 跑着跑着**卡住不动** | akshare 一千多个请求不带 timeout，默认无限等 | 已给每个请求补 `timeout=(10, 30)`；要调设 `ASTOCK_READ_TIMEOUT` |
+| 七种打法（`net_probe`）**全部失败**，curl 也是 `Empty reply` | **IP 被东财临时封了**，与 Python / shell / 代理都无关 | 等 10–30 分钟；或换网络（手机热点）验证。系统已内置熔断，不会继续硬打 |
+| `astock cooldown` 显示某域名冷却中 | 连续被拒后自动触发，期间不发请求直接走备用源 | 等冷却结束；确认能连了再 `astock cooldown --clear` |
+| 连着几个接口都 `RemoteDisconnected` | **重试把自己打成了限流**——密集请求会被东财掐连接 | 已加最小请求间隔 + 被掐时收紧重试；仍频繁的话把 `ASTOCK_MIN_INTERVAL` 调大到 1 |
 | `RemoteDisconnected` / `Connection aborted` | **连上了但被服务器掐掉**。akshare 有些接口裸调用不带 UA，东财会断开；也可能是代理线路把境内站绕到了境外 | 已自动补浏览器请求头 + 被掐时自动绕代理重试；仍不行跑 `net_check.py` 看「裸UA」那一列 |
 | 填了 `.env` 但读不到 | —— | 本项目会自动加载 `.env`，**不用 `source`**；检查是不是写成了 `ASTOCK_ACCOUNT_EQUITY = 200000`（等号两边不能有空格） |
 

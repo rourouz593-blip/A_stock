@@ -49,7 +49,7 @@ def build(run_id: str, as_of: str, mode: str = "close", with_positions: bool = T
 
     # ② 指数日线与快照
     log("指数日线 …")
-    idx_block, idx_df = f_market.fetch_index_daily(as_of)
+    idx_block, idx_df = f_market.fetch_index_daily(as_of, trading_days=past_days)
     idx_block.path = store.save_table(idx_df, run_id, "index_hist")
     blocks["index_hist"] = idx_block
     blocks["index_spot"] = DataBlock(
@@ -100,7 +100,7 @@ def build(run_id: str, as_of: str, mode: str = "close", with_positions: bool = T
         except Exception as e:
             flags.append(QualityFlag("holdings", "warning", f"持仓读取失败，章节四将为空: {e}"))
     log(f"持仓个股 {holdings_codes} …")
-    hold_block, hold_frames = f_stocks.fetch_holdings_quotes(holdings_codes, as_of)
+    hold_block, hold_frames = f_stocks.fetch_holdings_quotes(holdings_codes, as_of, trading_days=past_days)
     for code, df in hold_frames.items():
         store.save_table(df, run_id, f"holding_{code.replace('.', '_')}")
     blocks["holdings"] = hold_block
@@ -169,6 +169,13 @@ def main() -> None:
     try:
         dataset = build(args.run_id, args.as_of, args.mode,
                         with_positions=not args.no_positions)
+    except KeyboardInterrupt:
+        print("\n\n⌁ 已中断。run 目录还在，缓存也还在，"
+              "重跑 astock review 会从没取到的那块接着来。", file=sys.stderr)
+        print("  如果是卡住不动才按的 Ctrl-C：现在每个请求都有 "
+              f"{ak_client.HTTP_TIMEOUT[0]:.0f}s 连接 / {ak_client.HTTP_TIMEOUT[1]:.0f}s 读取超时，"
+              "不该再无限等；要调就设 ASTOCK_READ_TIMEOUT", file=sys.stderr)
+        sys.exit(130)
     except ak_client.FetchError as e:
         # 学生看 traceback 是没用的，给一句能照着做的话
         print(f"\n✗ 取数中断：{e}", file=sys.stderr)

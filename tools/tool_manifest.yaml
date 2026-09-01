@@ -35,6 +35,18 @@ tools:
     input: {timeout: "float  单次请求超时秒数"}
     output: "人读的诊断报告；退出码 0=至少一种方式可达，1=全不可达"
 
+  - name: net_probe
+    entry: tools/net_probe.py
+    status: implemented
+    description: |
+      同一个地址用七种打法各试一次（urllib / requests 四种变体 / 裸 socket / curl），
+      把"代理、压缩协商、连接复用、TLS 栈、限流"拆成正交的几维，
+      用结果表指出是哪一维决定成败。net_check 定位"哪个域名不通"，
+      net_probe 定位"为什么同一个域名换个库就通"。
+    allowed_agents: [orchestrator, data-engineer]
+    input: {timeout: float, rounds: "int 每种打法试几次", gap: "float 间隔秒数"}
+    output: "人读的实验报告 + 结论"
+
   - name: sync_harness
     entry: tools/sync_harness.py
     status: implemented

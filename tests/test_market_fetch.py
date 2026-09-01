@@ -132,3 +132,108 @@ def test_snapshot_turns_nan_amount_into_none():
     import json
 
     json.dumps(snap, allow_nan=False)      # 不抛异常即为通过
+
+
+# ── 本地仓库接入 ────────────────────────────────────────────────
+# 这几条守的是"仓库到底有没有省下请求"，以及"省错了会怎样"。
+from datetime import datetime      # noqa: E402
+
+from scripts.store import bars     # noqa: E402
+
+CAL = ["2026-08-26", "2026-08-27", "2026-08-28"]     # 假装这是交易日历
+AFTER = datetime(2026, 8, 28, 15, 40)
+
+
+@pytest.fixture
+def store(tmp_path, monkeypatch):
+    monkeypatch.setattr(bars, "DB_PATH", tmp_path / "h.sqlite")
+    monkeypatch.setattr(M, "_STORE_WARNED", False)
+    return tmp_path
+
+
+def _bar(d, close):
+    return {"日期": d, "开盘": close, "收盘": close, "最高": close, "最低": close,
+            "成交量": 1, "成交额": 1e8, "振幅": 1.0, "涨跌幅": 0.5}
+
+
+def _seed_all_indexes():
+    from scripts.contracts import CORE_INDEXES
+
+    for code in CORE_INDEXES:
+        bars.save("index_daily", code, [_bar(d, 3000.0) for d in CAL],
+                  source="test", now=AFTER)
+
+
+def test_full_store_coverage_sends_zero_requests(store, monkeypatch):
+    """仓库里齐了就一个请求都不发——这才是"减量"，不是"快一点"。"""
+    _seed_all_indexes()
+    monkeypatch.setattr(M, "call", lambda *a, **k: pytest.fail("不该发请求"))
+    block, df = M.fetch_index_daily("2026-08-28", lookback_days=3, trading_days=CAL)
+    assert block.status == "ok"
+    assert len(block.provenance.from_store) == 4
+    assert set(df["指数代码"]) == set(M.INDEX_MARKET_ID)
+
+
+def test_partial_coverage_only_fetches_what_is_missing(store, monkeypatch):
+    """一个指数缺、其余齐 → 只为那一个发请求。"""
+    _seed_all_indexes()
+    with bars.connect() as c:      # 只挖掉上证的一天
+        c.execute("DELETE FROM bars WHERE symbol='000001' AND date='2026-08-27'")
+        c.commit()
+
+    fetched = []
+
+    def fake_call(name, params=None, **kw):
+        fetched.append(params["symbol"])
+        return pd.DataFrame([_bar(d, 3000.0) for d in CAL])
+
+    monkeypatch.setattr(M, "call", fake_call)
+    block, _ = M.fetch_index_daily("2026-08-28", lookback_days=3, trading_days=CAL)
+    assert fetched == ["000001"], "只该补缺的那一个"
+    assert len(block.provenance.from_store) == 3
+
+
+def test_no_calendar_means_no_store(store, monkeypatch):
+    """拿不到交易日历时**不启用仓库**。
+
+    宁可不优化，也不要按日期减法瞎猜缺口——那会把节假日当成永远的缺口。
+    """
+    _seed_all_indexes()
+    fetched = []
+    monkeypatch.setattr(M, "call",
+                        lambda name, params=None, **kw: (
+                            fetched.append(params["symbol"]),
+                            pd.DataFrame([_bar(d, 3000.0) for d in CAL]))[1])
+    block, _ = M.fetch_index_daily("2026-08-28", lookback_days=3, trading_days=None)
+    assert len(fetched) == 4
+    assert block.provenance.from_store is None
+
+
+def test_degraded_source_is_not_written_to_the_store(store, monkeypatch):
+    """降级源的数据不入库。
+
+    新浪那条路没有成交额。一旦存进去，以后每次都会命中仓库、
+    再也不会回头问东财——"某天临时降级"就被永久固化成了"那天就是没有成交额"。
+    缺一次可以补，存错了不会自己好。
+    """
+    def boom(*a, **k):
+        raise RuntimeError("东财不可达")
+
+    monkeypatch.setattr(M, "call", boom)
+    monkeypatch.setattr(M, "_from_sina",
+                        lambda code, as_of, lb: pd.DataFrame(
+                            [{**_bar(d, 3000.0), "成交额": float("nan")} for d in CAL]))
+    M.fetch_index_daily("2026-08-28", lookback_days=3, trading_days=CAL)
+    assert bars.stats() == [], "降级数据一行都不该落库"
+
+
+def test_store_failure_never_blocks_the_review(store, monkeypatch, capsys):
+    """仓库是优化不是依赖：它坏了，照常联网取数。"""
+    monkeypatch.setattr(bars, "connect",
+                        lambda: (_ for _ in ()).throw(RuntimeError("disk I/O error")))
+    monkeypatch.setattr(M, "call",
+                        lambda name, params=None, **kw: pd.DataFrame(
+                            [_bar(d, 3000.0) for d in CAL]))
+    block, _ = M.fetch_index_daily("2026-08-28", lookback_days=3, trading_days=CAL)
+    assert block.status == "ok"
+    assert "仓库不可用" in capsys.readouterr().out

@@ -20,10 +20,18 @@
 | **（上传持仓截图）**「更新我的持仓」「按这个截图跑复盘」 | 见下方「持仓截图导入」，**不要直接手改 positions.yaml** |
 | 「跑到哪了」「继续」 | `python tools/astock.py status` / `next` |
 | 「环境有问题」「跑不起来」 | `python tools/astock.py doctor` |
+| 「数据能不能取到」「先测一下取数」「哪块数据有问题」 | `python tools/astock.py check`（逐块体检，不跑完整流水线） |
+| 「取不到数」「被限流了」「今天怎么什么都拿不到」 | 先 `python tools/astock.py budget`（看是不是请求量失控），再 `cooldown`（看是不是在冷却期）。**不要靠重试解决，重试是这个问题的成因** |
+| 「本地存了哪些数据」「为什么这次这么快」 | `python tools/astock.py store` |
+| 「换个数据源」「这个数从哪来的」 | 改 `config/datasources.yaml`；换源前必须跑 `python tools/verify_provider.py` 对账 |
 | 「自动跑」「定时跑」「别占我的额度」「用便宜模型跑」 | 引导配 `config/models.yaml`，然后 `python tools/astock.py run` |
 | 「给我看看这个系统能出什么」（不联网 / 只是想看效果） | `python tools/astock.py demo` |
 
 **不要自己去查行情，不要凭印象分析，不要手写报告。** 这条流水线已经建好了，你的工作是驱动它。
+
+**也不要为了"把数据凑齐"而反复重跑取数。** 系统有每日请求预算（默认 300 个/天，
+一次正常复盘约 30–50 个）。撞上限说明有地方在重复取数，不是该调大上限。
+取不到就按 `blocked` 走——缺一块不会毁掉整份复盘，被封 IP 会。
 
 ### 两种执行方式
 

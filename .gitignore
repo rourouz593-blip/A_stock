@@ -13,6 +13,7 @@ venv/
 workspace/runs/*
 !workspace/runs/2026-08-28_example/
 workspace/cache/
+workspace/history.sqlite      # 本地行情仓库；删了会自动重建，只是要多花几个请求
 
 # 个人配置：持仓与阈值不入库，只保留 example
 config/positions.yaml
