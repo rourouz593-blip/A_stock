@@ -398,6 +398,28 @@ def test_proxy_error_always_tries_bypass_even_without_env_vars(monkeypatch):
     assert any("绕开代理" in f[0] for f in fb)
 
 
+def test_proxy_fallback_keeps_http_defaults(monkeypatch):
+    """绕开代理后仍必须带 UA、Referer、超时和 trust_env=False。"""
+    import requests
+    import requests.sessions as rs
+
+    seen = {}
+    monkeypatch.setattr(
+        rs.Session, "request",
+        lambda self, method, url, **kw: seen.update(
+            headers=kw.get("headers"), timeout=kw.get("timeout"),
+            trust_env=self.trust_env))
+    _, ctx, _ = ak_client._fallbacks(
+        Exception("ProxyError('Unable to connect to proxy')"),
+        direct=False, ipv4=False)[0]
+    with ctx():
+        requests.Session().request("GET", "https://push2his.eastmoney.com/x")
+    assert seen["headers"]["User-Agent"].startswith("Mozilla/")
+    assert seen["headers"]["Referer"] == "https://quote.eastmoney.com/"
+    assert seen["timeout"] == ak_client.HTTP_TIMEOUT
+    assert seen["trust_env"] is False
+
+
 def test_direct_sets_trust_env_false(monkeypatch):
     """ASTOCK_DIRECT=1 时必须 trust_env=False。
 
@@ -541,39 +563,29 @@ def test_clear_circuit(circuit, monkeypatch):
 # ── 每日请求预算 ────────────────────────────────────────────────
 @pytest.fixture
 def budget(tmp_path, monkeypatch):
-    """把预算收紧到很小，方便断言边界。"""
+    """隔离每日请求计数文件。"""
     monkeypatch.setattr(ak_client, "BUDGET_FILE", tmp_path / "b.json")
-    monkeypatch.setattr(ak_client, "MAX_REQUESTS", 5)
-    monkeypatch.setattr(ak_client, "MAX_PER_HOST", 3)
     monkeypatch.setattr(ak_client, "CIRCUIT_FILE", tmp_path / "c.json")
     return tmp_path
 
 
-def test_budget_stops_before_the_request_is_sent(budget, monkeypatch):
-    """超额时**一个字节都不发出去**——这才是"限量"的意义。
-
-    如果先发请求再计数，撞上限的那一刻已经打出去了；
-    这里断言的是：超额之后底层 request 的调用次数不再增加。
-    """
+def test_request_counter_never_blocks(budget, monkeypatch):
+    """计数只做可观测性，不得阻断请求。"""
     import requests
     import requests.sessions as rs
 
     sent = []
     monkeypatch.setattr(rs.Session, "request", lambda self, m, u, **kw: sent.append(u))
 
-    for _ in range(3):
+    for _ in range(10):
         with ak_client._with_http_defaults():
             requests.Session().request("GET", "https://push2his.eastmoney.com/x")
-    assert len(sent) == 3          # 单域名上限 3，正好打满
-
-    with pytest.raises(ak_client.BudgetExceeded):
-        with ak_client._with_http_defaults():
-            requests.Session().request("GET", "https://push2his.eastmoney.com/x")
-    assert len(sent) == 3          # 关键：没有第 4 个请求发出去
+    assert len(sent) == 10
+    assert ak_client.budget_state()["total"] == 10
 
 
-def test_budget_is_per_host_and_total(budget, monkeypatch):
-    """单域名上限先于总额生效，防止把所有额度砸在一个源上。"""
+def test_request_counter_tracks_each_host_without_limits(budget, monkeypatch):
+    """无上限时仍要记录每个域名的请求分布。"""
     import requests
     import requests.sessions as rs
 
@@ -583,16 +595,16 @@ def test_budget_is_per_host_and_total(budget, monkeypatch):
         with ak_client._with_http_defaults():
             requests.Session().request("GET", f"https://{host}/x")
 
-    for _ in range(3):
+    for _ in range(10):
         hit("push2his.eastmoney.com")
-    with pytest.raises(ak_client.BudgetExceeded, match="今日请求已达上限"):
-        hit("push2his.eastmoney.com")
-
-    # 换个域名还能继续，直到撞总额
-    hit("finance.sina.com.cn")
-    hit("finance.sina.com.cn")
-    with pytest.raises(ak_client.BudgetExceeded, match="今日请求预算已用尽"):
+    for _ in range(7):
         hit("finance.sina.com.cn")
+    state = ak_client.budget_state()
+    assert state["total"] == 17
+    assert state["hosts"] == {
+        "push2his.eastmoney.com": 10,
+        "finance.sina.com.cn": 7,
+    }
 
 
 def test_budget_survives_process_restart(budget, monkeypatch):
@@ -617,28 +629,6 @@ def test_budget_resets_across_days(budget):
     ak_client.BUDGET_FILE.parent.mkdir(parents=True, exist_ok=True)
     ak_client.BUDGET_FILE.write_text(json.dumps(stale), encoding="utf-8")
     assert ak_client.budget_state()["total"] == 0
-
-
-def test_budget_exceeded_is_not_retried(budget, monkeypatch):
-    """BudgetExceeded 必须直接冒泡，绝不能被 call() 的重试逻辑当成网络错误。
-
-    否则"限量"会变成"限量之后再打三次"——正好是它要防的事。
-    """
-    assert issubclass(ak_client.BudgetExceeded, ak_client.FetchError)
-
-    calls = []
-
-    def fake_fn(**kw):
-        calls.append(1)
-        raise ak_client.BudgetExceeded("用尽")
-
-    import types
-
-    fake_ak = types.SimpleNamespace(stock_x=fake_fn)
-    monkeypatch.setitem(__import__("sys").modules, "akshare", fake_ak)
-    with pytest.raises(ak_client.BudgetExceeded):
-        ak_client.call("stock_x", cache=False)
-    assert len(calls) == 1          # 只调了一次，没有重试
 
 
 def test_cache_hits_do_not_spend_budget(budget, monkeypatch, tmp_path):

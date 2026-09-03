@@ -98,6 +98,8 @@ def http(url: str, timeout: float, use_proxy: bool, ipv4: bool = False,
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--timeout", type=float, default=8.0)
@@ -197,7 +199,7 @@ def main() -> None:
             print(c("     受影响的章节会标 blocked 并在报告开头声明，不会拿旧数据凑数", OK))
     if any_asis and not proxy_hurts and not all_dead:
         print(c("   ✓ 全部数据源可达，可以跑 python tools/astock.py review", OK))
-    elif any_direct and not any_asis:
+    elif any_direct and not any_asis and not all_dead:
         print(c("   → 直连全通。跑： ASTOCK_DIRECT=1 python tools/astock.py review", OK))
     if not any_asis and not any_direct and not any_v4:
         print(c("   ✗ 一个都连不上。先跑 python tools/astock.py demo 看离线示例", NO))

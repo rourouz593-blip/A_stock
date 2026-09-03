@@ -15,7 +15,7 @@
 # 它遵守所有的闸
 
 限流、每日预算、熔断、本地仓库全部照常生效。所以：
-  - 跑它会消耗今天的请求预算（约 12–20 个请求，会在结尾告诉你实际用了多少）
+  - 跑它会发出约 12–20 个请求，结尾会告诉你实际用量
   - 仓库里已有的日子不会重新取，所以第二次跑会明显更省
   - 有域名在冷却期时，相关块会直接报"冷却中"，一个请求都不发
 
@@ -114,8 +114,7 @@ def main() -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
-    from scripts.ak_client import (MAX_REQUESTS, budget_state, cooling_hosts,
-                                   explain)
+    from scripts.ak_client import budget_state, cooling_hosts, explain
     from scripts.fetch import calendar as f_cal
 
     spent0 = budget_state()["total"]
@@ -194,7 +193,7 @@ def main() -> int:
                if r["status"] in ("failed", "missing")
                and meta.get(r["block"], ("", False, ""))[1]]
         print()
-        print(_c(f"  本次用掉 {spent} 个请求（今日累计 {budget_state()['total']}/{MAX_REQUESTS}）",
+        print(_c(f"  本次用掉 {spent} 个请求（今日累计 {budget_state()['total']}，无上限）",
                  C_DIM))
         print()
         if bad:

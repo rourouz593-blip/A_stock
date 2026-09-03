@@ -136,24 +136,15 @@ def _note_success(host: str) -> None:
 # **每个请求都成功，只是数量失控**。8-31 那次就是这样开始的——
 # 前几十个请求全是 200，等到开始被拒时，请求量已经放大了一个数量级。
 #
-# 所以再加一道更笨也更可靠的闸：**一天最多发多少个请求，数满即停**。
+# 现仅保留按日计数和域名分布，不再设硬上限。
 # 它不判断对错、不看返回码、不管是主源还是备用源，只数数。
 #
 # 关键设计：
-#   1. 落盘按日计数——用户往往反复重跑脚本，只存内存等于没有上限
+#   1. 落盘按日计数——用户往往反复重跑脚本，只存内存看不到累计量
 #   2. 检查放在最底层（patched Session.request 里），任何路径都绕不过
-#   3. 超额直接抛错，**绝不等待、绝不重试**——超额本身就是"今天已经打太多了"
+#   3. 计数只做观测；熏断、节流和缓存仍负责保护数据源
 #   4. 命中缓存的调用根本走不到这里，天然不计数
 BUDGET_FILE = CACHE_DIR / "budget.json"
-MAX_REQUESTS = int(os.getenv("ASTOCK_MAX_REQUESTS", "300"))    # 全部域名合计/天
-MAX_PER_HOST = int(os.getenv("ASTOCK_MAX_PER_HOST", "120"))    # 单域名/天
-_warned_at: set[str] = set()
-
-
-class BudgetExceeded(FetchError):
-    """今日请求预算用尽。不是网络问题，是自我保护。"""
-
-
 def _today() -> str:
     return datetime.now().strftime("%Y-%m-%d")
 
@@ -179,28 +170,11 @@ def reset_budget() -> int:
 
 
 def _spend(host: str) -> None:
-    """记一个请求。超额抛 BudgetExceeded——在请求发出**之前**。"""
+    """记一个请求；仅计数，不拦截。"""
     b = budget_state()
     used_host = b["hosts"].get(host, 0)
-    if b["total"] >= MAX_REQUESTS:
-        raise BudgetExceeded(
-            f"今日请求预算已用尽（{b['total']}/{MAX_REQUESTS}）。\n"
-            f"    这是自我保护，不是网络故障：请求量失控正是被封 IP 的前奏。\n"
-            f"    缺的数据请按 blocked 处理，不要绕过。\n"
-            f"    确认无误要放开：ASTOCK_MAX_REQUESTS=<更大的数>；"
-            f"清零：python tools/astock.py budget --reset")
-    if used_host >= MAX_PER_HOST:
-        raise BudgetExceeded(
-            f"{host} 今日请求已达上限（{used_host}/{MAX_PER_HOST}）。\n"
-            f"    单个域名打太多是被封的直接原因。请换源或按 blocked 处理。\n"
-            f"    放开：ASTOCK_MAX_PER_HOST=<更大的数>")
     b["total"] += 1
     b["hosts"][host] = used_host + 1
-    # 到 70% 时提醒一次，让人有机会在撞墙前发现异常
-    if b["total"] == int(MAX_REQUESTS * 0.7) and "total" not in _warned_at:
-        _warned_at.add("total")
-        print(f"[ak_client] 今日已发 {b['total']}/{MAX_REQUESTS} 个请求。"
-              f"一次正常复盘约 30–50 个——数字异常说明有地方在重复取数。", flush=True)
     BUDGET_FILE.parent.mkdir(parents=True, exist_ok=True)
     BUDGET_FILE.write_text(json.dumps(b, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -294,7 +268,7 @@ def _with_http_defaults(direct: bool = False):
                 f"{host} 正在冷却，还剩 {left:.0f} 分钟（连续被拒后自动触发）。\n"
                 f"    继续硬打只会扩大封禁范围。想强行试：ASTOCK_IGNORE_COOLDOWN=1；"
                 f"想清空：python tools/astock.py cooldown --clear")
-        _spend(host)                    # 超额在这里抛错——请求还没发出去
+        _spend(host)
         if direct:
             self.trust_env = False      # 无视一切 shell / 系统 / netrc 配置
         gap, need = time.time() - _last_request_at, _interval_for(host)
@@ -575,13 +549,13 @@ def _fallbacks(e: Exception, direct: bool, ipv4: bool):
     out = []
     has_proxy = bool(proxy_env())      # 压根没配代理就别试"绕开代理"，那是白打请求
     if _is_proxy_error(e) and not direct:
-        out.append(("绕开代理", _without_proxy,
+        out.append(("绕开代理", lambda: _base_ctx(True, ipv4),
                     "建议关掉代理或设 ASTOCK_DIRECT=1"))
     if _is_dropped(e):
         # 连上了却被掐：有代理就先怀疑线路；没代理就是站点在限流，
         # **这时候多试几条路等于加重限流**，什么都不做、快点退到备用源才是对的
         if has_proxy and not direct:
-            out.append(("绕开代理", _without_proxy,
+            out.append(("绕开代理", lambda: _base_ctx(True, ipv4),
                         "服务器主动断开，多半是代理线路把境内站点绕出去了；"
                         "建议 ASTOCK_DIRECT=1"))
     # 注意：`Connection aborted`（被掐）也含 "Connection" 字样，但它**不是连通性问题**，

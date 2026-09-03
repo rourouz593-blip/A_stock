@@ -293,20 +293,16 @@ def cmd_doctor(args) -> None:
     except Exception:
         pass
 
-    # 请求预算：数量失控是被封 IP 的前奏，比"已经被拒"更早能看见
+    # 请求计数：仅用于发现重复取数，不做硬拦截
     try:
-        from scripts.ak_client import MAX_REQUESTS, budget_state
+        from scripts.ak_client import budget_state
 
         b = budget_state()
-        pct = b["total"] / MAX_REQUESTS if MAX_REQUESTS else 0
         top = max(b["hosts"].items(), key=lambda kv: kv[1], default=None)
-        detail = f"今日 {b['total']}/{MAX_REQUESTS} 个请求"
+        detail = f"今日 {b['total']} 个请求（无上限）"
         if top:
             detail += f"，最多的是 {top[0]}（{top[1]} 个）"
-        check("请求预算", pct < 0.9, detail,
-              "一次正常复盘约 30–50 个。快满说明有地方在重复取数，"
-              "先查缓存再放大上限：python tools/astock.py budget",
-              fatal=False)
+        check("请求计数", True, detail)
     except Exception:
         pass
 
@@ -741,32 +737,25 @@ def cmd_budget(args) -> None:
     数字远超这个量级，说明有地方在重复取数，而不是该调大上限。
     """
     sys.path.insert(0, str(REPO_ROOT))
-    from scripts.ak_client import MAX_PER_HOST, MAX_REQUESTS, budget_state, reset_budget
+    from scripts.ak_client import budget_state, reset_budget
 
     if args.reset:
         n = reset_budget()
         say(_color(f"✓ 已清零今日计数（原本 {n} 个请求）", C_OK))
-        say(_color("  提醒：清零不会让对方忘记你今天打过多少。"
-                   "如果是因为撞上限才清，先想清楚为什么会打这么多。", C_DIM))
+        say(_color("  提醒：清零只删除本地计数，不会影响对方的限流状态。", C_DIM))
         return
 
     b = budget_state()
-    pct = b["total"] / MAX_REQUESTS if MAX_REQUESTS else 0
-    color = C_OK if pct < 0.7 else C_B
-    say(_color(f"今日请求：{b['total']} / {MAX_REQUESTS}"
-               f"（{pct:.0%}）", color))
+    say(_color(f"今日请求：{b['total']}（无上限）", C_OK))
     say(_color(f"参考：一次正常复盘约 30–50 个请求", C_DIM))
     say()
     if b["hosts"]:
         say(_color("按域名：", C_B))
         for host, n in sorted(b["hosts"].items(), key=lambda kv: -kv[1]):
-            bar = "█" * min(28, int(n / max(1, MAX_PER_HOST) * 28))
-            flag = _color("  ← 已达单域名上限", C_NO) if n >= MAX_PER_HOST else ""
-            say(f"  {host:<28} {n:>4} / {MAX_PER_HOST}  {bar}{flag}")
+            say(f"  {host:<32} {n:>4}")
     else:
         say(_color("  今天还没发过请求", C_DIM))
     say()
-    say(_color("  放大上限：ASTOCK_MAX_REQUESTS=600 ASTOCK_MAX_PER_HOST=200 ...", C_DIM))
     say(_color("  清零计数：python tools/astock.py budget --reset", C_DIM))
 
 
@@ -838,6 +827,8 @@ def cmd_demo(args) -> None:
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
     p = argparse.ArgumentParser(
         prog="astock", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -891,7 +882,7 @@ def main() -> None:
                     metavar="数据集", help="清空仓库；给数据集名则只清那一个")
     st.set_defaults(func=cmd_store)
 
-    bg = sub.add_parser("budget", help="看/清 今日请求预算（防止请求量失控）")
+    bg = sub.add_parser("budget", help="看/清今日请求计数（无上限）")
     bg.add_argument("--reset", action="store_true", help="清零今日计数")
     bg.set_defaults(func=cmd_budget)
 
