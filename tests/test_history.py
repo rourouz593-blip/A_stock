@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 
-from scripts.history import behavior_signals
+from agents.position_advisor.scripts.history import behavior_signals
 
 
 def _h(code="600519.SH", **kw):
@@ -87,7 +87,7 @@ def test_lookback_window_lets_old_changes_fade():
 
 
 def test_append_and_load_roundtrip(tmp_path, monkeypatch):
-    import scripts.history as H
+    import agents.position_advisor.scripts.history as H
 
     monkeypatch.setattr(H, "HISTORY", tmp_path / "h.jsonl")
     n = H.append_snapshot([{"code": "600519.SH", "cost": 12.8, "shares": 100,
@@ -99,7 +99,7 @@ def test_append_and_load_roundtrip(tmp_path, monkeypatch):
 
 def test_corrupt_line_does_not_break_loading(tmp_path, monkeypatch):
     """一条脏数据不该毁掉整个复盘。"""
-    import scripts.history as H
+    import agents.position_advisor.scripts.history as H
 
     f = tmp_path / "h.jsonl"
     f.write_text(json.dumps({"code": "A", "shares": 1}) + "\n{坏行}\n"

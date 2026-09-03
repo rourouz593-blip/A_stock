@@ -23,7 +23,7 @@
     },
     "derived": {
       "type": "object",
-      "description": "由 scripts/clean/derive.py 算出的派生量，保证可复现",
+      "description": "由 data_engineer/scripts/clean/derive.py 算出的派生量，保证可复现",
       "properties": {
         "two_market_amount": {"type": ["object", "null"]}
       }

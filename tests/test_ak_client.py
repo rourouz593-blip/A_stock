@@ -9,7 +9,7 @@ import time
 import pandas as pd
 import pytest
 
-from scripts import ak_client
+from agents.data_engineer.scripts import ak_client
 
 
 @pytest.fixture(autouse=True)

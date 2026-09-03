@@ -129,7 +129,7 @@ def test_preview_does_not_write(tmp_path):
 
 
 def test_dump_yaml_roundtrips():
-    """生成的 yaml 必须能被 scripts/positions.py 读回去。"""
+    """生成的 yaml 必须能被 position_advisor 的 positions.py 读回去。"""
     import yaml
 
     import import_positions as ip
@@ -143,7 +143,7 @@ def test_dump_yaml_roundtrips():
 
 
 def test_skill_exists_and_warns_against_guessing_thesis():
-    p = REPO / "skills" / "positions-import" / "SKILL.md"
+    p = REPO / "agents" / "position_advisor" / "skills" / "positions-import" / "SKILL.md"
     assert p.is_file()
     body = p.read_text(encoding="utf-8")
     assert "不要猜" in body and "thesis" in body

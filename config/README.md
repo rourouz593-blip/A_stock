@@ -16,7 +16,7 @@ cp config/thresholds.example.yaml config/thresholds.yaml
 ```
 
 **钱不写进 yaml。** 账户总资产放在 `.env` 的 `ASTOCK_ACCOUNT_EQUITY`，`.env` 已在 `.gitignore` 里。
-`.env` 由 `scripts/env.py` 自动加载（纯标准库，不依赖 python-dotenv），**不需要 `source .env`**；
+`.env` 由 `core/env.py` 自动加载（纯标准库，不依赖 python-dotenv），**不需要 `source .env`**；
 真实环境变量优先于 `.env`，方便 CI 覆盖。
 
 ## 都不配会怎样
@@ -34,6 +34,6 @@ cp config/thresholds.example.yaml config/thresholds.yaml
 
 ## 需要你反复调的只有一个文件
 
-`thresholds.yaml`。`skills/` 写的是框架（怎么判断），这里写的是数值（多少算强）。
+`thresholds.yaml`。Agent-owned `SKILL.md` 写判断框架，这里写可调整数值。
 框架通用，数值因人而异。目前大部分是 `null` + `TODO(strategy)`，
 唯一已确定的是 `risk.per_trade_max_pct: 0.5`（单笔风险不超过账户 0.5%）。

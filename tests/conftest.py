@@ -17,7 +17,7 @@ sys.path.insert(0, str(REPO / "tools"))
 # 规则：任何落盘状态都必须在 conftest 里改指到 tmp_path。
 @pytest.fixture(autouse=True)
 def _isolate_persistent_state(tmp_path, monkeypatch):
-    from scripts import ak_client
+    from agents.data_engineer.scripts import ak_client
 
     monkeypatch.setattr(ak_client, "BUDGET_FILE", tmp_path / "budget.json")
     monkeypatch.setattr(ak_client, "CIRCUIT_FILE", tmp_path / "circuit.json")

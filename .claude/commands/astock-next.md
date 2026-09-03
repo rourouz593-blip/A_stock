@@ -2,7 +2,7 @@
 description: 查看当前复盘进行到哪一步，并按提示继续
 ---
 
-<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agents/ 或 AGENTS.md 后重新生成 -->
+<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agent package 或 AGENTS.md 后重新生成 -->
 
 ```bash
 python tools/astock.py status

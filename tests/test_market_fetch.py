@@ -11,11 +11,11 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from scripts.fetch import market as M
+from agents.data_engineer.scripts.fetch import market as M
 
 
 def test_index_market_ids_cover_all_core_indexes():
-    from scripts.contracts import CORE_INDEXES
+    from core.contracts import CORE_INDEXES
 
     assert set(M.INDEX_MARKET_ID) == set(CORE_INDEXES), "四大指数的市场号必须齐全"
     assert M.INDEX_MARKET_ID["000001"] == 1, "上证是沪市"
@@ -106,7 +106,7 @@ def test_sina_board_prefix(monkeypatch):
 
 # ── 备用源导致的成交额缺失，不许被当成 0 ─────────────────────────
 def test_two_market_amount_refuses_to_guess_when_amount_missing():
-    from scripts.clean import derive
+    from agents.data_engineer.scripts.clean import derive
 
     snap = [{"code": "000001", "name": "上证指数", "amount": 5.0e11, "amount_chg_pct": 8.0},
             {"code": "399001", "name": "深证成指", "amount": None, "amount_chg_pct": None}]
@@ -138,7 +138,7 @@ def test_snapshot_turns_nan_amount_into_none():
 # 这几条守的是"仓库到底有没有省下请求"，以及"省错了会怎样"。
 from datetime import datetime      # noqa: E402
 
-from scripts.store import bars     # noqa: E402
+from agents.data_engineer.scripts.store import bars     # noqa: E402
 
 CAL = ["2026-08-26", "2026-08-27", "2026-08-28"]     # 假装这是交易日历
 AFTER = datetime(2026, 8, 28, 15, 40)
@@ -157,7 +157,7 @@ def _bar(d, close):
 
 
 def _seed_all_indexes():
-    from scripts.contracts import CORE_INDEXES
+    from core.contracts import CORE_INDEXES
 
     for code in CORE_INDEXES:
         bars.save("index_daily", code, [_bar(d, 3000.0) for d in CAL],

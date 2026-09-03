@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from scripts import llm
+from agents.orchestrator.scripts import llm
 
 
 CFG = {

@@ -3,7 +3,7 @@ description: 跑一次 A 股每日复盘（建 run + 取数 + 进入分析循环
 argument-hint: "[YYYY-MM-DD] [close|premarket|positions|weekly]"
 ---
 
-<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agents/ 或 AGENTS.md 后重新生成 -->
+<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agent package 或 AGENTS.md 后重新生成 -->
 
 先读 `AGENTS.md`，然后：
 

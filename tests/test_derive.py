@@ -3,7 +3,7 @@
 """
 from __future__ import annotations
 
-from scripts.clean import derive
+from agents.data_engineer.scripts.clean import derive
 
 
 def _snap(sh_amount, sz_amount, sh_chg=10.0, sz_chg=10.0):

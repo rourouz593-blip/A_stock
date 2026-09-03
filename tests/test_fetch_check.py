@@ -12,7 +12,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 
 def _pipeline_blocks() -> set:
-    src = (REPO / "scripts" / "build_dataset.py").read_text(encoding="utf-8")
+    src = (REPO / "agents" / "data_engineer" / "scripts" / "build_dataset.py").read_text(encoding="utf-8")
     return set(re.findall(r'blocks\["([a-z_]+)"\]', src))
 
 

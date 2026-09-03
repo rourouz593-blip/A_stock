@@ -8,7 +8,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from scripts.fetch import breadth
+from agents.data_engineer.scripts.fetch import breadth
 
 
 def _pool(codes, boards=None):

@@ -31,7 +31,9 @@ def test_harness_adapters_are_in_sync() -> None:
 
 
 def test_every_agent_has_an_adapter() -> None:
-    agents = {p.stem for p in (REPO / "agents").glob("*.md")} - {"README"}
+    from core.agent_registry import agent_files, read_meta
+
+    agents = {read_meta(p)["name"] for p in agent_files()}
     for harness_dir in (".claude/agents", ".opencode/agent"):
         got = {p.stem for p in (REPO / harness_dir).glob("*.md")}
         assert got == agents, f"{harness_dir} 与 agents/ 不一致：{got ^ agents}"
@@ -96,5 +98,7 @@ def test_artifact_map_covers_every_agent() -> None:
     sys.path.insert(0, str(REPO / "tools"))
     import astock
 
-    agents = {p.stem for p in (REPO / "agents").glob("*.md")} - {"README", "orchestrator"}
+    from core.agent_registry import agent_files, read_meta
+
+    agents = {read_meta(p)["name"] for p in agent_files()} - {"orchestrator"}
     assert agents <= set(astock.ARTIFACT_OF), "有 agent 没登记产物名，astock done 会不认它"

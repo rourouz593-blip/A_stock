@@ -3,7 +3,7 @@ name: a-stock-daily-review
 description: A 股每日复盘。当用户说「帮我做今日股市复盘、复盘一下今天大盘、今天 A 股怎么样、盘后复盘、跑一下复盘、看看我的持仓、明日预案、今天什么板块最强、生成复盘报告、股市日报、收盘总结、A股复盘」等类似意图时使用。驱动本仓库的多智能体流水线，产出九章复盘报告与 HTML 仪表盘。禁止绕过流水线自行查行情或凭印象分析。
 ---
 
-<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agents/ 或 AGENTS.md 后重新生成 -->
+<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agent package 或 AGENTS.md 后重新生成 -->
 
 # A 股每日复盘
 
@@ -27,12 +27,12 @@ python tools/astock.py done <agent>
 ## 你要亲自完成的是"判断"，不是"取数"
 
 - 取数、算炸板率、算风险金额、渲染报告 → 都是确定性代码，`astock` 会跑
-- 判断情绪阶段、认主线龙头、给持仓定动作 → 这是你的活，方法论在 `skills/`
+- 判断情绪阶段、认主线龙头、给持仓定动作 → 这是你的活，方法论在当前 agent package
 
 ## 开工前必读
 
 - `AGENTS.md` —— 本仓库的完整操作手册（角色、契约、纪律）
-- 每一步 `next` 指给你的那份 `agents/<name>.md`
+- 每一步 `next` 指给你的 `agents/<package>/AGENT.md` 与 `SKILL.md`
 
 ## 四条铁律
 

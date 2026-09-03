@@ -11,8 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from scripts import agent_runner as ar
-from scripts import llm
+from agents.orchestrator.scripts import agent_runner as ar
+from agents.orchestrator.scripts import llm
+from core.agent_registry import agent_file, read_meta
 
 REPO = Path(__file__).resolve().parent.parent
 EXAMPLE = REPO / "workspace" / "runs" / "2026-08-28_example"
@@ -51,8 +52,7 @@ def test_each_agent_gets_only_its_blocks():
     import yaml
 
     for name in ("market-analyst", "sector-analyst", "news-analyst", "position-advisor"):
-        fm = yaml.safe_load((REPO / "agents" / f"{name}.md")
-                            .read_text(encoding="utf-8").split("---")[1])
+        fm = read_meta(agent_file(name))
         declared = set(fm["dataset_blocks"])
         doc = json.loads((EXAMPLE / "dataset.json").read_text(encoding="utf-8"))
         got = set(ar.slim_dataset(doc, list(declared))["blocks"])

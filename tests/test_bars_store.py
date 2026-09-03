@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from scripts.store import bars
+from agents.data_engineer.scripts.store import bars
 
 
 @pytest.fixture(autouse=True)

@@ -5,8 +5,8 @@
 """
 import pytest
 
-from scripts import providers
-from scripts.providers import tencent
+from agents.data_engineer.scripts import providers
+from agents.data_engineer.scripts.providers import tencent
 
 
 # ── 代码前缀路由 ────────────────────────────────────────────────
@@ -105,13 +105,24 @@ def test_get_returns_named_callables():
     assert all(callable(f) for _, f in got)
 
 
+def test_external_provider_path(monkeypatch, tmp_path):
+    plugin = tmp_path / "custom.py"
+    plugin.write_text("def spot(codes, **kwargs): return {'source': 'custom'}\n", encoding="utf-8")
+    monkeypatch.setenv("ASTOCK_PROVIDER_PATHS", str(tmp_path))
+    monkeypatch.setenv("ASTOCK_PROVIDER_SPOT", "custom")
+    providers._provider.cache_clear()
+    got = providers.get("spot", "spot")
+    assert [name for name, _ in got] == ["custom"]
+    assert got[0][1]([])["source"] == "custom"
+
+
 # ── 持仓取数：仓库 + 批量快照 ───────────────────────────────────
 from datetime import datetime          # noqa: E402
 
 import pandas as pd                    # noqa: E402
 
-from scripts.fetch import stocks as S  # noqa: E402
-from scripts.store import bars         # noqa: E402
+from agents.data_engineer.scripts.fetch import stocks as S  # noqa: E402
+from agents.data_engineer.scripts.store import bars         # noqa: E402
 
 CAL = ["2026-08-26", "2026-08-27", "2026-08-28"]
 AFTER = datetime(2026, 8, 28, 15, 40)
@@ -141,7 +152,7 @@ def test_snapshot_is_one_request_for_all_holdings(db, monkeypatch):
         seen.append(list(codes))
         return {c: {"code": c, "price": 100.0, "is_stale": False} for c in codes}
 
-    monkeypatch.setattr("scripts.providers.tencent.spot", fake_spot)
+    monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot", fake_spot)
     monkeypatch.setattr(S, "try_call", lambda *a, **k: (_hist(), None))
     S.fetch_holdings_quotes(["600519", "000858", "300476"], "2026-08-28",
                             trading_days=CAL)
@@ -153,7 +164,7 @@ def test_history_comes_from_the_store_on_rerun(db, monkeypatch):
     """同一天重跑：历史不再联网。"""
     bars.save("stock_daily_qfq", "600519", _hist().to_dict("records"),
               source="test", now=AFTER)
-    monkeypatch.setattr("scripts.providers.tencent.spot",
+    monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot",
                         lambda codes, **kw: {c: {"code": c, "is_stale": False} for c in codes})
     monkeypatch.setattr(S, "try_call",
                         lambda *a, **k: pytest.fail("历史齐了就不该再取日线"))
@@ -170,7 +181,7 @@ def test_qfq_drift_invalidates_the_stored_series(db, monkeypatch):
     """
     bars.save("stock_daily_qfq", "600519", _hist(100.0).to_dict("records"),
               source="test", now=AFTER)
-    monkeypatch.setattr("scripts.providers.tencent.spot",
+    monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot",
                         lambda codes, **kw: {c: {"code": c, "is_stale": False} for c in codes})
     # 少一天 → 触发联网重取；返回的价格整体变了（除权）
     with bars.connect() as c:
@@ -190,7 +201,7 @@ def test_no_drift_means_no_invalidation(db, monkeypatch):
     with bars.connect() as c:
         c.execute("DELETE FROM bars WHERE symbol='600519' AND date='2026-08-28'")
         c.commit()
-    monkeypatch.setattr("scripts.providers.tencent.spot",
+    monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot",
                         lambda codes, **kw: {c: {"code": c, "is_stale": False} for c in codes})
     monkeypatch.setattr(S, "try_call", lambda *a, **k: (_hist(100.0), None))
     block, _ = S.fetch_holdings_quotes(["600519"], "2026-08-28", trading_days=CAL)
@@ -198,7 +209,7 @@ def test_no_drift_means_no_invalidation(db, monkeypatch):
 
 
 def test_stale_snapshot_is_flagged(db, monkeypatch):
-    monkeypatch.setattr("scripts.providers.tencent.spot",
+    monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot",
                         lambda codes, **kw: {c: {"code": c, "price": 10.0,
                                                  "is_stale": True} for c in codes})
     monkeypatch.setattr(S, "try_call", lambda *a, **k: (_hist(), None))
@@ -211,8 +222,8 @@ def test_snapshot_failure_does_not_block_the_review(db, monkeypatch):
     def boom(codes, **kw):
         raise RuntimeError("网络不通")
 
-    monkeypatch.setattr("scripts.providers.tencent.spot", boom)
-    monkeypatch.setattr("scripts.providers.eastmoney.spot", boom)
+    monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot", boom)
+    monkeypatch.setattr("agents.data_engineer.scripts.providers.eastmoney.spot", boom)
     monkeypatch.setattr(S, "try_call", lambda *a, **k: (_hist(), None))
     block, frames = S.fetch_holdings_quotes(["600519"], "2026-08-28", trading_days=CAL)
     assert block.status == "ok" and frames

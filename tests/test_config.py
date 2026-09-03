@@ -16,7 +16,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 # ── .env 加载器 ────────────────────────────────────────────────
 def test_dotenv_parses_comments_quotes_and_export(tmp_path, monkeypatch):
-    from scripts.env import load_dotenv
+    from core.env import load_dotenv
 
     f = tmp_path / ".env"
     f.write_text(
@@ -39,7 +39,7 @@ def test_dotenv_parses_comments_quotes_and_export(tmp_path, monkeypatch):
 
 def test_real_env_wins_over_dotenv(tmp_path, monkeypatch):
     """真实环境变量优先于 .env——CI 里能覆盖，本地不受影响。"""
-    from scripts.env import load_dotenv
+    from core.env import load_dotenv
 
     f = tmp_path / ".env"
     f.write_text("ASTOCK_ACCOUNT_EQUITY=1\n", encoding="utf-8")
@@ -50,21 +50,21 @@ def test_real_env_wins_over_dotenv(tmp_path, monkeypatch):
 
 def test_missing_dotenv_is_silent(tmp_path):
     """.env 是可选的，不存在不该报错。"""
-    from scripts.env import load_dotenv
+    from core.env import load_dotenv
 
     assert load_dotenv(tmp_path / "nope.env") == {}
 
 
 def test_scripts_package_autoloads_dotenv():
     """导入 scripts 包就会自动加载 .env，不用记得先 source。"""
-    src = (REPO / "scripts" / "__init__.py").read_text(encoding="utf-8")
+    src = (REPO / "core" / "cli.py").read_text(encoding="utf-8")
     assert "load_dotenv()" in src
 
 
 # ── 缺配置时的降级行为 ──────────────────────────────────────────
 def test_missing_positions_yaml_raises_actionable_error(tmp_path, monkeypatch):
     """没有 positions.yaml 时要给出可执行的提示，而不是 FileNotFoundError。"""
-    from scripts.positions import PositionError, load_positions
+    from agents.position_advisor.scripts.positions import PositionError, load_positions
 
     monkeypatch.setenv("ASTOCK_ACCOUNT_EQUITY", "100000")
     with pytest.raises(PositionError) as e:
@@ -74,7 +74,7 @@ def test_missing_positions_yaml_raises_actionable_error(tmp_path, monkeypatch):
 
 def test_missing_equity_refuses_to_guess(tmp_path, monkeypatch):
     """没配账户总资产时必须报错，绝不许拿持仓市值当账户规模估算。"""
-    from scripts.positions import PositionError, load_positions
+    from agents.position_advisor.scripts.positions import PositionError, load_positions
 
     f = tmp_path / "positions.yaml"
     f.write_text("version: 1\npositions:\n  - {code: '999001.SZ', cost: 10, shares: 100}\n",
@@ -87,14 +87,14 @@ def test_missing_equity_refuses_to_guess(tmp_path, monkeypatch):
 
 def test_thresholds_falls_back_to_example():
     """没有 thresholds.yaml 时回退到 example，流程不中断（阈值为 null 而已）。"""
-    src = (REPO / "tools" / "compute_risk.py").read_text(encoding="utf-8")
+    src = (REPO / "agents" / "position_advisor" / "tools" / "compute_risk.py").read_text(encoding="utf-8")
     assert "thresholds.example.yaml" in src
 
 
 def test_dataset_build_survives_missing_positions():
     """持仓读不到时只标 warning，不该让整个取数失败——
     没填持仓的人也应该能看到章节①②③⑥。"""
-    src = (REPO / "scripts" / "build_dataset.py").read_text(encoding="utf-8")
+    src = (REPO / "agents" / "data_engineer" / "scripts" / "build_dataset.py").read_text(encoding="utf-8")
     assert "持仓读取失败，章节四将为空" in src
 
 

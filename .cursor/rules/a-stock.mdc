@@ -3,7 +3,7 @@ description: A 股每日复盘流水线的使用方式
 alwaysApply: true
 ---
 
-<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agents/ 或 AGENTS.md 后重新生成 -->
+<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agent package 或 AGENTS.md 后重新生成 -->
 
 本仓库是一条 A 股每日复盘流水线。用户说「复盘 / 今天大盘 / 看看我的持仓」时，
 **不要自己查行情或凭印象分析**，驱动流水线：

@@ -3,8 +3,8 @@ description: 把当日新闻、政策、公告、外围科技表现去重后分�
 mode: subagent
 ---
 
-<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agents/ 或 AGENTS.md 后重新生成 -->
+<!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agent package 或 AGENTS.md 后重新生成 -->
 
-完整职责定义在 `agents/news-analyst.md`，先读那份文件。
+完整职责定义在 `agents/news_analyst/AGENT.md`，先读那份文件。
 只读 workspace/runs/{run_id}/dataset.json、memory/runs/；只写 workspace/runs/{run_id}/news.json；
 结构见 `schemas/news.schema.json`；完成后跑 `python tools/astock.py done news-analyst`。

@@ -1,27 +1,6 @@
-# docs/ — 教学文档
+# Documentation
 
-按顺序读，每篇末尾有练习。
-
-| # | 文档 | 讲什么 |
-|---|---|---|
-| 01 | [什么是 agentic workflow](01-什么是agentic-workflow.md) | 从"一个大 prompt"到"一套系统"，以及为什么好的 agent 系统会主动停下来 |
-| 02 | [组件如何咬合](02-组件如何咬合.md) | 六层组件的边界、依赖方向、加东西时要改哪几处 |
-| 03 | [动手：加一个新 agent](03-动手加一个新agent.md) | 完整走一遍扩展流程（七步，只有一步在写 prompt） |
-| 04 | [数据接入指南](04-数据接入指南.md) | AKShare 三层结构、A 股六个坑、怎么加新数据块、怎么写不联网的测试 |
-| 05 | [常见失败模式](05-常见失败模式.md) | 八种典型失败与本项目的防御设计 + 一张体检表 |
-| 06 | [一套内容，适配所有 coding agent](06-harness适配.md) | 意图路由、状态机、生成式适配层——让任何 agent 零背景接手 |
-
-## 建议的学习路径
-
-**第一天**：跑 `python tools/make_demo_run.py` + `render_report.py`，
-打开 HTML 看一遍，再打开那七个 JSON 对照着看。然后读 01、02。
-
-**第二天**：读 04，配好环境跑一次真实取数，看 `data/<run_id>/*.csv` 里的原始数据。
-
-**第三天**：读 05，然后填 `config/thresholds.yaml`——
-这一步会逼你想清楚"我到底按什么标准判断"。
-
-**第四天**：读 06，试着让另一个 coding agent（opencode / Codex）接手跑一次复盘，
-看它是不是真的零背景就能跑通。跑不通的地方就是 harness 设计的漏洞。
-
-**之后**：挑 README 第十节的扩展任务做。
+- [Architecture](ARCHITECTURE.md)
+- [Extension packages](EXTENSIONS.md)
+- [Data integration](04-数据接入指南.md)
+- [Failure modes](05-常见失败模式.md)

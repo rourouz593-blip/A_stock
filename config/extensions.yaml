@@ -1,0 +1,12 @@
+# Optional package search paths. Relative paths are resolved from the repository root.
+# Earlier entries override built-ins with the same agent/provider name.
+paths:
+  agents: []
+  skills: []
+  providers: []
+
+# Add skills to a discovered agent without editing its package.
+agent_skills: {}
+# Example:
+# agent_skills:
+#   market-analyst: [my-market-method]

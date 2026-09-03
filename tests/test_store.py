@@ -14,7 +14,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from scripts.store import repository as R
+from core import repository as R
 
 
 def _dumps(payload):
