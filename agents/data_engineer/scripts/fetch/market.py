@@ -1,63 +1,10 @@
 """指数行情：快照、日线、分时。对应报告章节一（市场总览）与章节二（指数复盘）。"""
 from __future__ import annotations
 
-from contextlib import contextmanager
+from ..ak_client import now_iso
+from .. import providers
+from core.contracts import CORE_INDEXES, DataBlock, Provenance, QualityFlag
 
-from ..ak_client import call, now_iso, try_call
-from core.contracts import CORE_INDEXES, DataBlock, Provenance, QualityFlag, to_ak_date
-
-# ── 绕开 index_code_id_map_em() ────────────────────────────────
-# akshare 的 index_zh_a_hist() 在取 K 线之前，会先请求 80.push2.eastmoney.com
-# 拉一份「全部指数 → 市场号」的对照表，只为了知道 000001 属于沪市还是深市。
-#
-# 问题是：K 线接口 push2his.eastmoney.com 在很多网络上是通的，
-# 而 80.push2 这个分片主机经常连不上（超时 / reset）。
-# 于是"明明数据源能连"，却卡在一个纯粹多余的前置请求上。
-#
-# 我们只盯四个固定指数，市场号是常数，根本不需要去问。
-# 直接把那张表喂给 akshare，省掉一次请求，也去掉一个故障点。
-INDEX_MARKET_ID = {"000001": 1, "399001": 0, "399006": 0, "000688": 1}  # 1=沪 0=深
-
-
-@contextmanager
-def _skip_index_code_map():
-    try:
-        from akshare.index import index_zh_em as m
-    except Exception:
-        yield
-        return
-    orig = getattr(m, "index_code_id_map_em", None)
-    if orig is None:
-        yield
-        return
-    m.index_code_id_map_em = lambda: dict(INDEX_MARKET_ID)
-    try:
-        yield
-    finally:
-        m.index_code_id_map_em = orig
-
-
-def _from_sina(code: str, as_of: str, lookback_days: int):
-    """备用源：新浪指数日线。
-
-    什么时候用：东财整个不可达时。
-    代价要说清楚——**新浪这个接口不返回成交额**，
-    所以章节①的"两市成交额"会缺失。宁可缺一个字段并标注，也不编一个数。
-    """
-    import pandas as pd
-
-    board = "sh" if INDEX_MARKET_ID.get(code) == 1 else "sz"
-    df = call("stock_zh_index_daily", {"symbol": f"{board}{code}"})
-    df = df.copy()
-    df["日期"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    df = df[df["日期"] <= as_of].tail(lookback_days * 2)
-    df = df.rename(columns={"open": "开盘", "close": "收盘", "high": "最高",
-                            "low": "最低", "volume": "成交量"})
-    prev = df["收盘"].shift(1)
-    df["涨跌幅"] = ((df["收盘"] / prev - 1) * 100).round(2)
-    df["振幅"] = ((df["最高"] - df["最低"]) / prev * 100).round(2)
-    df["成交额"] = float("nan")          # 新浪不给，如实留空
-    return df[["日期", "开盘", "收盘", "最高", "最低", "成交量", "成交额", "振幅", "涨跌幅"]]
 
 # ── 本地仓库（已收盘的日子只取一次）──────────────────────────────
 # 见同一 Agent 下 scripts/store/bars.py 的模块文档。这里只做三件事：
@@ -106,22 +53,30 @@ SESSIONS = [
 ]
 
 
+def _fetch(dataset: str, capability: str, *args):
+    errors = []
+    for name, call in providers.get(dataset, capability):
+        try:
+            return call(*args), name, None
+        except Exception as exc:
+            errors.append(f"{name}: {exc}")
+    return None, None, "; ".join(errors) or f"没有配置 {dataset} provider"
+
+
 def fetch_index_daily(as_of: str, lookback_days: int = 60,
                       trading_days=None) -> DataBlock:
-    """四大指数的日线。开收高低涨跌幅成交额全部来自这里（收盘后的权威口径）。
+    """四大指数日线：三只使用 Baostock，科创50 使用 AShare。
 
     `trading_days`：交易日历（build_dataset 会传）。给了就启用本地仓库——
     仓库里已经齐全的指数**一个请求都不发**。不给就照常全部走网络。
     """
     import pandas as pd
 
-    start = (pd.Timestamp(as_of) - pd.Timedelta(days=lookback_days * 2)).strftime("%Y%m%d")
+    start = (pd.Timestamp(as_of) - pd.Timedelta(days=lookback_days * 2)).strftime("%Y-%m-%d")
     frames, flags = [], []
-    fallback_from = None
     store, want = _store(), _want_days(as_of, lookback_days, trading_days)
-    from_store = []
+    from_store, fresh, used = [], 0, {}
     for code, meta in CORE_INDEXES.items():
-        degraded = None
         # ① 仓库里齐了就直接用——已收盘的日线不会变，没有任何理由再取一次
         if store and want:
             try:
@@ -132,38 +87,23 @@ def fetch_index_daily(as_of: str, lookback_days: int = 60,
                     df["指数名称"] = meta["name"]
                     frames.append(df)
                     from_store.append(code)
+                    fresh += int(str(df["日期"].iloc[-1]) == as_of)
                     continue
             except Exception as e:
                 print(f"[market] 读仓库失败，改走网络：{str(e)[:80]}", flush=True)
-        try:
-            with _skip_index_code_map():
-                df = call(
-                    "index_zh_a_hist",
-                    {"symbol": code, "period": "daily",
-                     "start_date": start, "end_date": to_ak_date(as_of)},
-                )
-        except Exception as e:
-            # 东财不可达 → 退到新浪。降级必须出声，并且如实记进 provenance
-            print(f"[market] 东财取 {meta['name']} 失败，改用新浪备用源：{str(e)[:120]}",
-                  flush=True)
-            df = _from_sina(code, as_of, lookback_days)
-            fallback_from = degraded = "akshare.index_zh_a_hist"
+        dataset = "index_daily_000688" if code == "000688" else "index_daily"
+        df, provider, error = _fetch(dataset, "index_daily", code, start, as_of)
+        if df is None or len(df) == 0:
+            print(f"[market] {meta['name']} 日线失败：{str(error)[:120]}", flush=True)
             flags.append(QualityFlag(
-                "index_hist", "warning",
-                f"{meta['name']} 用了新浪备用源，**成交额缺失**——"
-                f"章节①的两市成交额将无法计算"))
+                "index_hist", "error", f"{meta['name']} 日线取数失败: {error}"))
+            continue
+        used[code] = provider
         df = df.copy()
-        # ② 存回仓库。未收盘的当天会被 bars.save 自己挡掉，这里不用判断。
-        #
-        # **降级源的数据不入库**：新浪那条路没有成交额，一旦存进去，
-        # 以后每次都会命中仓库、再也不会回头去问东财，
-        # 于是"某天临时降级"被永久固化成了"那天就是没有成交额"。
-        # 缺一次可以补，存错了不会自己好。
-        if store and not degraded:
+        if store:
             try:
                 store.save("index_daily", code, df.to_dict("records"),
-                           source="akshare.index_zh_a_hist" if not fallback_from
-                           else "akshare.stock_zh_index_daily")
+                           source=f"{provider}.index_daily")
             except Exception as e:
                 print(f"[market] 写仓库失败（不影响本次复盘）：{str(e)[:80]}", flush=True)
         df["指数代码"] = code
@@ -172,23 +112,32 @@ def fetch_index_daily(as_of: str, lookback_days: int = 60,
         if str(df["日期"].iloc[-1]) != as_of:
             flags.append(
                 QualityFlag(
-                    "index_hist",
-                    "warning",
-                    f"{meta['name']} 最新日线是 {df['日期'].iloc[-1]}，不是 {as_of}（可能非交易日或数据未更新）",
+                    "index_hist", "error",
+                    f"{meta['name']} 最新日线是 {df['日期'].iloc[-1]}，不是 {as_of}；当天数据尚未发布",
                 )
             )
+        else:
+            fresh += 1
+    if not frames:
+        return DataBlock(
+            status="missing", rows=0,
+            provenance=Provenance(
+                source="configured.index_daily", fetched_at=now_iso(),
+                params={"symbols": list(CORE_INDEXES), "period": "daily"},
+            ),
+            flags=flags,
+        ), None
     all_df = pd.concat(frames, ignore_index=True)
     return DataBlock(
-        status="ok",
+        status="ok" if fresh == len(CORE_INDEXES) else "degraded",
         rows=len(all_df),
         inline=_today_snapshot(all_df, as_of),
         provenance=Provenance(
-            source=("akshare.stock_zh_index_daily(新浪备用)" if fallback_from
-                    else "akshare.index_zh_a_hist"),
+            source="+".join(sorted(set(used.values()))) or "local_store",
             fetched_at=now_iso(),
-            params={"symbols": list(CORE_INDEXES), "period": "daily"},
+            params={"symbols": list(CORE_INDEXES), "period": "daily",
+                    "provider_by_symbol": used},
             unit="CNY_yuan",
-            fallback_from=fallback_from,
             from_store=from_store or None,
         ),
         flags=flags,
@@ -206,7 +155,7 @@ def _today_snapshot(all_df, as_of: str) -> list[dict]:
         prev = sub.iloc[-2] if len(sub) > 1 else None
 
         def _f(v):
-            """NaN → None。新浪备用源不返回成交额，缺失就是缺失，不能当成 0。"""
+            """NaN → None。缺失就是缺失，不能当成 0。"""
             try:
                 x = float(v)
             except (TypeError, ValueError):
@@ -238,16 +187,16 @@ def _today_snapshot(all_df, as_of: str) -> list[dict]:
 def fetch_index_intraday(as_of: str) -> DataBlock:
     """四大指数的分钟线，用于把走势拆成早盘/上午/午后/尾盘四段。
 
-    注意：东财分时接口只保留最近几个交易日，取历史日期会拿不到——
+    注意：腾讯分时接口只保留近期数据，取历史日期可能拿不到——
     这时标 degraded 而不是编造分段走势。
     """
     import pandas as pd
 
     frames, flags, sessions = [], [], {}
-    store, from_store = _store(), []
+    store, from_store, used = _store(), [], {}
     for code, meta in CORE_INDEXES.items():
         # ① 先问仓库。分时这一块的仓库价值比日线还大：
-        #    东财只保留最近几个交易日，**过了窗口就再也取不到了**。
+        #    腾讯只保留近期分钟线，**过了窗口就再也取不到了**。
         #    存下来不只是省请求，是让"复盘上个月某一天"这件事从不可能变成可能。
         df = None
         if store:
@@ -261,28 +210,20 @@ def fetch_index_intraday(as_of: str) -> DataBlock:
             except Exception as e:
                 print(f"[market] 读分时仓库失败，改走网络：{str(e)[:80]}", flush=True)
         if df is None:
-            with _skip_index_code_map():
-                df, err = try_call(
-                    "index_zh_a_hist_min_em",
-                    {
-                        "symbol": code,
-                        "period": "1",
-                        "start_date": f"{as_of} 09:15:00",
-                        "end_date": f"{as_of} 15:05:00",
-                    },
-                )
+            df, provider, err = _fetch("index_intraday", "index_intraday", code, as_of)
             if df is None or len(df) == 0:
                 flags.append(QualityFlag(
                     "index_intraday", "warning",
                     f"{meta['name']} 分时数据取不到: {err}"))
                 continue
+            used[code] = provider
             # ② 存回仓库。整天的分钟线打包成一行——
             #    仓库的键是"哪一天"，不是"哪一分钟"
             if store:
                 try:
                     store.save("index_intraday", code,
                                [{"日期": as_of, "rows": df.to_dict("records")}],
-                               source="akshare.index_zh_a_hist_min_em")
+                               source=f"{provider}.index_intraday")
                 except Exception as e:
                     print(f"[market] 写分时仓库失败（不影响本次复盘）：{str(e)[:80]}",
                           flush=True)
@@ -297,7 +238,7 @@ def fetch_index_intraday(as_of: str) -> DataBlock:
             status="missing",
             rows=0,
             provenance=Provenance(
-                source="akshare.index_zh_a_hist_min_em", fetched_at=now_iso(), params={"date": as_of}
+                source="configured.index_intraday", fetched_at=now_iso(), params={"date": as_of}
             ),
             flags=flags,
         ), None
@@ -308,9 +249,9 @@ def fetch_index_intraday(as_of: str) -> DataBlock:
         rows=len(all_df),
         inline=sessions,
         provenance=Provenance(
-            source="akshare.index_zh_a_hist_min_em",
+            source="+".join(sorted(set(used.values()))) or "local_store",
             fetched_at=now_iso(),
-            params={"date": as_of, "period": "1"},
+            params={"date": as_of, "period": "1", "provider_by_symbol": used},
             from_store=from_store or None,
         ),
         flags=flags,
@@ -337,7 +278,15 @@ def _split_sessions(df, name: str) -> dict:
                 "high": float(seg["最高"].max()),
                 "low": float(seg["最低"].min()),
                 "pct_chg_in_session": round((last / first - 1) * 100, 2) if first else None,
-                "amount": float(seg["成交额"].sum()),
+                "amount": _nullable_sum(seg["成交额"]),
             }
         )
     return out
+
+
+def _nullable_sum(values):
+    """Unknown turnover stays unknown; it must never silently become zero."""
+    import pandas as pd
+
+    total = pd.to_numeric(values, errors="coerce").sum(min_count=1)
+    return None if pd.isna(total) else float(total)

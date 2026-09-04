@@ -6,7 +6,7 @@
 import pytest
 
 from agents.data_engineer.scripts import providers
-from agents.data_engineer.scripts.providers import tencent
+from agents.data_engineer.scripts.providers import ashare, sina, tencent
 
 
 # ── 代码前缀路由 ────────────────────────────────────────────────
@@ -85,7 +85,13 @@ def test_explicit_prefixes_do_not_collide():
 # ── 优先级链 ────────────────────────────────────────────────────
 def test_chain_reads_config():
     assert providers.chain("spot")[0] == "tencent", "批量快照必须优先走不封 IP 的源"
-    assert "eastmoney" in providers.chain("spot")
+    assert providers.chain("spot") == ["tencent"]
+    assert providers.chain("index_daily") == ["baostock"]
+    assert providers.chain("index_daily_000688") == ["ashare"]
+    assert providers.chain("index_intraday") == ["ashare"]
+    assert providers.chain("stock_daily") == ["ashare"]
+    assert providers.chain("sectors") == ["sina"]
+    assert providers.chain("sector_flow") == []
 
 
 def test_env_overrides_config(monkeypatch):
@@ -101,8 +107,23 @@ def test_unknown_dataset_is_empty_not_crash():
 
 def test_get_returns_named_callables():
     got = providers.get("spot", "spot")
-    assert [n for n, _ in got] == ["tencent", "eastmoney"]
+    assert [n for n, _ in got] == ["tencent"]
     assert all(callable(f) for _, f in got)
+
+
+def test_sina_sector_provider_normalizes_contract(monkeypatch):
+    frame = pd.DataFrame([{
+        "label": "new_test", "板块": "测试行业", "涨跌幅": "2.5",
+        "股票名称": "测试股份", "总成交额": "123",
+    }])
+    monkeypatch.setattr(
+        "agents.data_engineer.scripts.ak_client.try_call",
+        lambda name, params: (frame, None),
+    )
+    got = sina.sector_rankings("industry")
+    assert got.iloc[0]["板块名称"] == "测试行业"
+    assert got.iloc[0]["板块代码"] == "new_test"
+    assert got.iloc[0]["领涨股票"] == "测试股份"
 
 
 def test_external_provider_path(monkeypatch, tmp_path):
@@ -122,6 +143,7 @@ from datetime import datetime          # noqa: E402
 import pandas as pd                    # noqa: E402
 
 from agents.data_engineer.scripts.fetch import stocks as S  # noqa: E402
+from agents.data_engineer.scripts.fetch import sectors as SECTORS  # noqa: E402
 from agents.data_engineer.scripts.store import bars         # noqa: E402
 
 CAL = ["2026-08-26", "2026-08-27", "2026-08-28"]
@@ -140,6 +162,30 @@ def _hist(close=100.0):
                           "振幅": 1.0, "涨跌幅": 0.5, "换手率": 1.0} for d in CAL])
 
 
+def test_sector_rankings_use_configured_provider(monkeypatch):
+    calls = []
+
+    def fake(kind):
+        calls.append(kind)
+        return pd.DataFrame([{
+            "板块名称": kind, "板块代码": kind, "涨跌幅": 1.0,
+            "领涨股票": "样本", "总成交额": 100,
+        }])
+
+    monkeypatch.setattr(providers, "get", lambda dataset, capability: [("sina", fake)])
+    block, frames = SECTORS.fetch_sectors()
+    assert calls == ["industry", "concept"]
+    assert block.status == "ok" and block.provenance.source == "sina"
+    assert set(frames) == {"industry", "concept"}
+
+
+def test_sector_flow_is_missing_without_eastmoney(monkeypatch):
+    monkeypatch.setattr(SECTORS, "try_call", lambda *a, **k: pytest.fail("不应联网"))
+    block = SECTORS.fetch_sector_flow()
+    assert block.status == "missing" and block.rows == 0
+    assert "已禁用 Eastmoney" in block.flags[0].message
+
+
 def test_snapshot_is_one_request_for_all_holdings(db, monkeypatch):
     """N 只持仓 → 1 个快照请求，不是 N 个。
 
@@ -153,7 +199,7 @@ def test_snapshot_is_one_request_for_all_holdings(db, monkeypatch):
         return {c: {"code": c, "price": 100.0, "is_stale": False} for c in codes}
 
     monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot", fake_spot)
-    monkeypatch.setattr(S, "try_call", lambda *a, **k: (_hist(), None))
+    monkeypatch.setattr(ashare, "stock_daily", lambda *a, **k: _hist())
     S.fetch_holdings_quotes(["600519", "000858", "300476"], "2026-08-28",
                             trading_days=CAL)
     assert len(seen) == 1, "只该发一次快照请求"
@@ -166,7 +212,7 @@ def test_history_comes_from_the_store_on_rerun(db, monkeypatch):
               source="test", now=AFTER)
     monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot",
                         lambda codes, **kw: {c: {"code": c, "is_stale": False} for c in codes})
-    monkeypatch.setattr(S, "try_call",
+    monkeypatch.setattr(ashare, "stock_daily",
                         lambda *a, **k: pytest.fail("历史齐了就不该再取日线"))
     block, frames = S.fetch_holdings_quotes(["600519"], "2026-08-28", trading_days=CAL)
     assert block.provenance.from_store == ["600519"]
@@ -187,7 +233,7 @@ def test_qfq_drift_invalidates_the_stored_series(db, monkeypatch):
     with bars.connect() as c:
         c.execute("DELETE FROM bars WHERE symbol='600519' AND date='2026-08-28'")
         c.commit()
-    monkeypatch.setattr(S, "try_call", lambda *a, **k: (_hist(88.0), None))
+    monkeypatch.setattr(ashare, "stock_daily", lambda *a, **k: _hist(88.0))
     block, _ = S.fetch_holdings_quotes(["600519"], "2026-08-28", trading_days=CAL)
     assert block.provenance.params["qfq_refetched"] == ["600519"]
     stored = bars.load("stock_daily_qfq", "600519", "2026-08-26", "2026-08-28")
@@ -203,7 +249,7 @@ def test_no_drift_means_no_invalidation(db, monkeypatch):
         c.commit()
     monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot",
                         lambda codes, **kw: {c: {"code": c, "is_stale": False} for c in codes})
-    monkeypatch.setattr(S, "try_call", lambda *a, **k: (_hist(100.0), None))
+    monkeypatch.setattr(ashare, "stock_daily", lambda *a, **k: _hist(100.0))
     block, _ = S.fetch_holdings_quotes(["600519"], "2026-08-28", trading_days=CAL)
     assert block.provenance.params["qfq_refetched"] is None
 
@@ -212,7 +258,7 @@ def test_stale_snapshot_is_flagged(db, monkeypatch):
     monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot",
                         lambda codes, **kw: {c: {"code": c, "price": 10.0,
                                                  "is_stale": True} for c in codes})
-    monkeypatch.setattr(S, "try_call", lambda *a, **k: (_hist(), None))
+    monkeypatch.setattr(ashare, "stock_daily", lambda *a, **k: _hist())
     block, _ = S.fetch_holdings_quotes(["600519"], "2026-08-28", trading_days=CAL)
     assert any("停牌" in f.message for f in block.flags)
 
@@ -223,8 +269,7 @@ def test_snapshot_failure_does_not_block_the_review(db, monkeypatch):
         raise RuntimeError("网络不通")
 
     monkeypatch.setattr("agents.data_engineer.scripts.providers.tencent.spot", boom)
-    monkeypatch.setattr("agents.data_engineer.scripts.providers.eastmoney.spot", boom)
-    monkeypatch.setattr(S, "try_call", lambda *a, **k: (_hist(), None))
+    monkeypatch.setattr(ashare, "stock_daily", lambda *a, **k: _hist())
     block, frames = S.fetch_holdings_quotes(["600519"], "2026-08-28", trading_days=CAL)
     assert block.status == "ok" and frames
     assert block.provenance.params["spot_provider"] is None

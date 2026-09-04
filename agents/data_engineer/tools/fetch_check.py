@@ -50,7 +50,7 @@ BLOCKS = [
     ("calendar",       "全部",   True,  "交易日历——所有时间对齐都靠它，它挂了别的都别谈"),
     ("index_hist",     "①②",    True,  "四大指数日线：开收高低、涨跌幅、两市成交额"),
     ("index_spot",     "①",     True,  "指数当日快照——由 index_hist 派生，不额外发请求"),
-    ("index_intraday", "②",     False, "指数分时→日内四段。东财只留最近几天，历史日期取不到属正常"),
+    ("index_intraday", "②",     False, "指数分时→日内四段。腾讯只留近期数据，历史日期取不到属正常"),
     ("breadth",        "①",     True,  "涨跌家数"),
     ("limit_pool",     "①③",    True,  "涨停/炸板/跌停池→连板梯队与炸板率"),
     ("sectors",        "③",     True,  "板块行情排名"),

@@ -1,6 +1,6 @@
 ---
 name: data-engineer
-description: 用 AKShare 把当日行情、涨停生态、板块、持仓、新闻公告取回来，清洗成 dataset.json。所有需要"拉数据"的场景都派它，其他 agent 一律不得自行取数。
+description: 从各模块指定的数据源取回当日行情、涨停生态、板块、持仓和新闻公告，清洗成 dataset.json。其他 agent 一律不得自行取数。
 ---
 
 <!-- 本文件由 tools/sync_harness.py 生成，不要手改；改 agent package 或 AGENTS.md 后重新生成 -->

@@ -1,5 +1,5 @@
 ---
-description: 用 AKShare 把当日行情、涨停生态、板块、持仓、新闻公告取回来，清洗成 dataset.json。所有需要"拉数据"的场景都派它，其他 agent 一律不得自行取数。
+description: 从各模块指定的数据源取回当日行情、涨停生态、板块、持仓和新闻公告，清洗成 dataset.json。其他 agent 一律不得自行取数。
 mode: subagent
 ---
 

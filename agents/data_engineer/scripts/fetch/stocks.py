@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from ..ak_client import now_iso, try_call
-from core.contracts import DataBlock, Provenance, QualityFlag, bare, to_ak_date
+from .. import providers
+from core.contracts import DataBlock, Provenance, QualityFlag, bare
 
 # ── 持仓日线：仓库优先 + 批量快照 ────────────────────────────────
 # 改造前：**每只持仓一个东财请求**。10 只持仓 = 10 个东财请求，每天如此。
@@ -10,7 +11,7 @@ from core.contracts import DataBlock, Provenance, QualityFlag, bare, to_ak_date
 #   「批量场景 AI 跑循环逐个拉，是被封的头号元凶」
 #
 # 改造后分两半：
-#   历史（90 个交易日）→ 本地仓库，只有缺的那几天才联网
+#   历史（90 个交易日）→ 本地仓库，缺口走 AShare 的腾讯 qfq 端点
 #   当日快照          → 腾讯**一个请求拿全部持仓**（不封 IP）
 # 稳态下东财请求数从 N 降到 0。
 
@@ -67,20 +68,18 @@ def fetch_holdings_quotes(codes: list[str], as_of: str, lookback_days: int = 90,
             status="missing",
             rows=0,
             inline=[],
-            provenance=Provenance(source="akshare.stock_zh_a_hist", fetched_at=now_iso(), params={}),
+            provenance=Provenance(source="configured.stock_daily", fetched_at=now_iso(), params={}),
             flags=[QualityFlag("holdings", "info", "positions.yaml 里没有持仓，章节四将为空")],
         ), {}
 
-    start = (pd.Timestamp(as_of) - pd.Timedelta(days=lookback_days * 2)).strftime("%Y%m%d")
+    start = (pd.Timestamp(as_of) - pd.Timedelta(days=lookback_days * 2)).strftime("%Y-%m-%d")
     flags, frames, inline = [], {}, []
     store = _store()
-    from_store, drifted = [], []
+    from_store, drifted, history_sources = [], [], {}
 
-    # ① 当日快照：一个请求拿全部持仓（腾讯批量），失败再退回东财逐个拉
-    from ..providers import get as _providers
-
+    # ① 当日快照：一个请求拿全部持仓（腾讯批量）；失败就明确标缺失
     snap, snap_source = {}, None
-    for pname, fn in _providers("spot", "spot"):
+    for pname, fn in providers.get("spot", "spot"):
         try:
             snap = fn(codes)
         except Exception as e:
@@ -114,19 +113,21 @@ def fetch_holdings_quotes(codes: list[str], as_of: str, lookback_days: int = 90,
             except Exception:
                 stored = None
         if df is None:
-            raw, err = try_call(
-                "stock_zh_a_hist",
-                {
-                    "symbol": bare(code),
-                    "period": "daily",
-                    "start_date": start,
-                    "end_date": to_ak_date(as_of),
-                    "adjust": "qfq",
-                },
-            )
+            raw, provider, errors = None, None, []
+            for pname, fn in providers.get("stock_daily", "stock_daily"):
+                try:
+                    raw = fn(bare(code), start, as_of)
+                except Exception as exc:
+                    errors.append(f"{pname}: {exc}")
+                    continue
+                if raw is not None and len(raw):
+                    provider = pname
+                    break
             if raw is None or len(raw) == 0:
-                flags.append(QualityFlag("holdings", "error", f"{code} 日线取不到: {err}"))
+                error = "; ".join(errors) or "没有配置 stock_daily provider"
+                flags.append(QualityFlag("holdings", "error", f"{code} 日线取不到: {error}"))
                 continue
+            history_sources[code] = provider
             df = raw
             if store:
                 try:
@@ -142,11 +143,19 @@ def fetch_holdings_quotes(codes: list[str], as_of: str, lookback_days: int = 90,
                             "holdings", "info",
                             f"{code} 前复权历史已变（多半是除权除息），仓库存量已作废重取"))
                     store.save("stock_daily_qfq", bare(code), raw.to_dict("records"),
-                               source="akshare.stock_zh_a_hist(qfq)")
+                               source=f"{provider}.stock_daily(qfq)")
                 except Exception as e:
                     print(f"[stocks] 写仓库失败（不影响本次复盘）：{str(e)[:80]}", flush=True)
         frames[code] = df
         last = df.iloc[-1]
+
+        def _number(value):
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                return None
+            return None if pd.isna(number) else number
+
         inline.append(
             {
                 "code": code,
@@ -156,9 +165,9 @@ def fetch_holdings_quotes(codes: list[str], as_of: str, lookback_days: int = 90,
                 "high": float(last["最高"]),
                 "low": float(last["最低"]),
                 "pct_chg": float(last["涨跌幅"]),
-                "amplitude": float(last.get("振幅", 0) or 0),
-                "turnover_rate": float(last.get("换手率", 0) or 0),
-                "amount": float(last["成交额"]),
+                "amplitude": _number(last.get("振幅")),
+                "turnover_rate": _number(last.get("换手率")),
+                "amount": _number(last.get("成交额")),
                 "ma5": round(float(df["收盘"].tail(5).mean()), 2),
                 "ma10": round(float(df["收盘"].tail(10).mean()), 2),
                 "ma20": round(float(df["收盘"].tail(20).mean()), 2),
@@ -180,10 +189,11 @@ def fetch_holdings_quotes(codes: list[str], as_of: str, lookback_days: int = 90,
         rows=sum(len(v) for v in frames.values()),
         inline=inline,
         provenance=Provenance(
-            source="akshare.stock_zh_a_hist",
+            source="+".join(sorted(set(history_sources.values()))) or "local_store",
             fetched_at=now_iso(),
             params={"adjust": "qfq", "codes": codes, "end_date": as_of,
-                    "spot_provider": snap_source, "qfq_refetched": drifted or None},
+                    "spot_provider": snap_source, "qfq_refetched": drifted or None,
+                    "history_provider_by_symbol": history_sources},
             unit="CNY_yuan",
             from_store=from_store or None,
         ),

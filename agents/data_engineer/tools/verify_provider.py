@@ -25,12 +25,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 from core.paths import REPO_ROOT
 sys.path.insert(0, str(REPO_ROOT))
 
-from agents.data_engineer.scripts.providers import chain, get  # noqa: E402
+from agents.data_engineer.scripts import providers  # noqa: E402
 
 # 字段 → 允许的相对误差。不同源的小数位、四舍五入、快照时刻都会有细微差别，
 # 但**数量级绝不能差**——差三个数量级就是字段读错了，不是精度问题。
@@ -44,6 +45,8 @@ TOLERANCE = {
     "limit_down": 0.0,
 }
 DEFAULT_CODES = ["000001", "399001", "399006", "000688", "600519", "000858"]
+DAILY_TOLERANCE = {"开盘": 0.001, "收盘": 0.001, "最高": 0.001,
+                   "最低": 0.001, "成交量": 0.05}
 
 
 def _cmp(a, b, tol: float) -> tuple[bool, str]:
@@ -63,24 +66,47 @@ def _cmp(a, b, tol: float) -> tuple[bool, str]:
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description="跨源对账")
     ap.add_argument("codes", nargs="*", default=None)
     ap.add_argument("--dataset", default="spot")
+    ap.add_argument("--providers", help="逗号分隔；用于对账尚未进入同一生产链的源")
+    ap.add_argument("--as-of", default=date.today().isoformat())
     args = ap.parse_args()
     codes = args.codes or DEFAULT_CODES
 
-    provs = get(args.dataset, args.dataset)
+    names = ([p.strip() for p in args.providers.split(",") if p.strip()]
+             if args.providers else providers.chain(args.dataset))
+    provs = []
+    for name in names:
+        module = providers._provider(name)
+        call = getattr(module, args.dataset, None) if module else None
+        if call:
+            provs.append((name, call))
     if len(provs) < 2:
         print(f"✗ {args.dataset} 只有 {len(provs)} 个可用 provider，没法对账")
         return 2
 
-    print(f"数据集 {args.dataset}，优先级 {chain(args.dataset)}")
+    print(f"数据集 {args.dataset}，对账源 {names}")
     print(f"标的 {', '.join(codes)}\n")
 
     results = {}
     for name, fn in provs:
         try:
-            results[name] = fn(codes)
+            if args.dataset == "index_daily":
+                start = (date.fromisoformat(args.as_of) - timedelta(days=14)).isoformat()
+                results[name] = {}
+                for code in codes:
+                    try:
+                        frame = fn(code, start, args.as_of)
+                        row = frame[frame["日期"] == args.as_of]
+                        if not row.empty:
+                            results[name][code] = row.iloc[-1].to_dict()
+                    except Exception:
+                        pass
+            else:
+                results[name] = fn(codes)
             print(f"  ✓ {name:<12} 拿到 {len(results[name])} 只")
         except Exception as e:
             print(f"  ✗ {name:<12} 失败：{str(e)[:100]}")
@@ -100,7 +126,8 @@ def main() -> int:
             print(f"  {code}  一方没有这只票（{a_name}:{bool(qa)} {b_name}:{bool(qb)}）")
             continue
         rows = []
-        for field, tol in TOLERANCE.items():
+        tolerance = DAILY_TOLERANCE if args.dataset == "index_daily" else TOLERANCE
+        for field, tol in tolerance.items():
             ok, note = _cmp(qa.get(field), qb.get(field), tol)
             if not ok:
                 bad += 1

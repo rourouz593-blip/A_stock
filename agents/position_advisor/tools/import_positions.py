@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import date
@@ -43,7 +44,7 @@ from pathlib import Path
 
 from core.cli import REPO_ROOT, emit, fail
 
-POSITIONS = REPO_ROOT / "config" / "positions.yaml"
+POSITIONS = Path(os.getenv("ASTOCK_POSITIONS_FILE", REPO_ROOT / "config" / "positions.yaml"))
 EXAMPLE = REPO_ROOT / "config" / "positions.example.yaml"
 HUMAN_FIELDS = ("thesis", "module", "sector", "stop_level", "buy_date")
 CODE_RE = re.compile(r"^\d{6}$")

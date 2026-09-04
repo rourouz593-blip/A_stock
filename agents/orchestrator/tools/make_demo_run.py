@@ -95,7 +95,7 @@ def dataset(run_id, as_of):
             "limit_pool": {"status": "ok", "rows": 163, "path": f"data/{run_id}/pool_*.csv",
                            "provenance": prov("akshare.stock_zt_pool_em")},
             "sectors": {"status": "ok", "rows": 480, "path": f"data/{run_id}/sector_*.csv",
-                        "provenance": prov("akshare.stock_board_industry_name_em")},
+                        "provenance": prov("sina.stock_sector_spot")},
             "sector_flow": {"status": "ok", "rows": 40, "path": f"data/{run_id}/sector_flow.csv",
                             "provenance": prov("akshare.stock_sector_fund_flow_rank", indicator="今日")},
             "holdings": {"status": "ok", "rows": 180,

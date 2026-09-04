@@ -190,6 +190,7 @@ def cmd_doctor(args) -> None:
         check("Python 版本", True, f"当前 {cur}")
 
     for mod, fatal, fix in [("akshare", True, "pip install -r requirements.txt"),
+                            ("baostock", True, "pip install -r requirements.txt"),
                             ("pandas", True, "pip install -r requirements.txt"),
                             ("yaml", True, "pip install pyyaml"),
                             ("jsonschema", True, "pip install jsonschema"),
@@ -309,7 +310,24 @@ def cmd_doctor(args) -> None:
         check("本地仓库", False, str(e)[:60],
               "仓库不可用不影响复盘，只是每次都要重新联网取数", fatal=False)
 
-    # 网络：只有真正连得上 AKShare 才能跑真实复盘
+    # 网络：指数日线只走 Baostock，其余数据仍依赖 AKShare
+    bao_ok, bao_detail = False, ""
+    try:
+        import contextlib
+        import io
+        import baostock as bs
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            login = bs.login()
+            if login.error_code == "0":
+                bs.logout()
+        bao_ok = login.error_code == "0"
+        bao_detail = "登录成功" if bao_ok else f"{login.error_code} {login.error_msg}"
+    except Exception as e:
+        bao_detail = str(e)[:100]
+    check("Baostock 网络连通（指数日线）", bao_ok, bao_detail,
+          "确认网络允许 Baostock 登录服务；指数日线不会回退其他来源", fatal=False)
+
     net_ok, net_detail = False, ""
     try:
         import akshare as ak  # noqa: F401
@@ -327,11 +345,11 @@ def cmd_doctor(args) -> None:
           "或先看离线示例 python tools/astock.py demo", fatal=False)
 
     say()
-    if ok and net_ok:
+    if ok and net_ok and bao_ok:
         as_of, note = default_as_of()
         say(_color(f"✓ 一切就绪。下一步：python tools/astock.py review   （将分析 {as_of}{note}）", C_OK))
     elif ok:
-        say(_color("! 依赖齐全但连不上 AKShare —— 真实取数暂时跑不了。", C_DIM))
+        say(_color("! 依赖齐全但至少一个数据源不可达 —— 真实取数会缺块。", C_DIM))
         say(_color("  离线示例照样能看：python tools/astock.py demo", C_DIM))
     else:
         say(_color(f"✗ {len(fails)} 项必需检查未通过：", C_NO))

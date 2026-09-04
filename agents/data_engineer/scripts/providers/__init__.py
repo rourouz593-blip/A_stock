@@ -37,9 +37,13 @@ CONFIG = REPO_ROOT / "config" / "datasources.yaml"
 
 # dataset → [provider 名字，按优先级]。读不到配置时的兜底，与 datasources.yaml 保持一致。
 DEFAULT_CHAIN = {
-    "spot": ["tencent", "eastmoney"],
-    "index_daily": ["eastmoney", "sina"],
-    "stock_daily": ["eastmoney"],
+    "spot": ["tencent"],
+    "index_daily": ["baostock"],
+    "index_daily_000688": ["ashare"],
+    "index_intraday": ["ashare"],
+    "stock_daily": ["ashare"],
+    "sectors": ["sina"],
+    "sector_flow": [],
 }
 
 

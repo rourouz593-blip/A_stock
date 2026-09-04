@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,9 +26,11 @@ def _payload(**over) -> dict:
 
 
 def _run(payload: dict, *extra: str) -> subprocess.CompletedProcess:
+    env = os.environ.copy()
+    env["ASTOCK_POSITIONS_FILE"] = str(REPO / "config" / "positions.example.yaml")
     return subprocess.run(
         [sys.executable, "tools/import_positions.py", "--json", json.dumps(payload), *extra],
-        cwd=REPO, capture_output=True, text=True)
+        cwd=REPO, capture_output=True, text=True, env=env)
 
 
 # ── 算术自检 ───────────────────────────────────────────────────

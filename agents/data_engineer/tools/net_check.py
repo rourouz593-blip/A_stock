@@ -34,15 +34,14 @@ from agents.data_engineer.scripts.ak_client import DATA_HOSTS, PROXY_VARS, redac
 TARGETS = [
     ("交易日历",   "https://finance.sina.com.cn/realstock/company/klc_td_sh.txt",
      "全部（判断是否交易日）", True),
-    ("指数日线",   "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000001"
-                   "&fields1=f1&fields2=f51&klt=101&fqt=0&beg=0&end=20500000",
-     "①市场总览 ②指数复盘", True),
-    ("指数列表",   "https://80.push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&fs=m:1+t:1&fields=f12",
-     "无（本项目已绕开这个多余请求）", False),
+    ("指数分钟",   "https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=sh000001,m1,,1",
+     "②指数复盘（日内四段）", False),
+    ("持仓日线",   "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh603005,day,,,1,qfq",
+     "④持仓计划 ⑦风险纪律", False),
     ("涨停池",     "https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989"
                    "&dpt=wz.ztzt&Pageindex=0&pagesize=1&sort=fbt:asc&date=20240101",
      "①炸板率/晋级率/连板梯队 ③梯队", False),
-    ("板块行情",   "https://17.push2.eastmoney.com/api/qt/clist/get?pn=1&pz=1&fs=m:90+t:2&fields=f12",
+    ("板块行情",   "http://vip.stock.finance.sina.com.cn/q/view/newSinaHy.php",
      "③板块与题材", False),
     ("涨跌家数",   "https://legulegu.com/stockdata/market-activity",
      "①涨跌家数", False),
