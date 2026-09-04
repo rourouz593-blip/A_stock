@@ -22,7 +22,7 @@
 克隆仓库并进入项目目录：
 
 ```bash
-git clone https://github.com/rourouz593-blip/A_stock.git
+git clone https://github.com/JJChand/A_stock.git
 cd A_stock
 python -m venv .venv
 ```
