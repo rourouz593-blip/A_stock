@@ -605,7 +605,8 @@ def _append_memory(run_id: str) -> None:
         idx = REPO_ROOT / "memory" / "MEMORY.md"
         line = (f"- {run_id} | {summary['as_of']} | {(summary['one_liner'] or '')[:40]} "
                 f"| [记录](runs/{run_id}.json)\n")
-        text = idx.read_text(encoding="utf-8")
+        text = (idx.read_text(encoding="utf-8") if idx.is_file()
+                else "# 运行记忆索引\n")
         if f"runs/{run_id}.json" not in text:
             idx.write_text(text.rstrip("\n") + "\n" + line, encoding="utf-8")
         say(_color(f"✓ 已写入记忆 memory/runs/{run_id}.json", C_OK))

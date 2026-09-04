@@ -102,3 +102,31 @@ def test_artifact_map_covers_every_agent() -> None:
 
     agents = {read_meta(p)["name"] for p in agent_files()} - {"orchestrator"}
     assert agents <= set(astock.ARTIFACT_OF), "有 agent 没登记产物名，astock done 会不认它"
+
+
+def test_first_run_creates_local_ignored_memory_index(tmp_path, monkeypatch) -> None:
+    """新克隆仓库首次完成复盘时创建索引，但绝不能让 Git 跟踪。"""
+    from agents.orchestrator.tools import astock
+
+    workspace = tmp_path / "workspace"
+    run = workspace / "runs" / "first-run"
+    run.mkdir(parents=True)
+    (run / "run_manifest.json").write_text(
+        json.dumps({"as_of": "2026-09-04", "mode": "close", "status": "complete"}),
+        encoding="utf-8",
+    )
+    (run / "report.json").write_text(
+        json.dumps({"panel": {"one_liner": "测试", "actions": []}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(astock, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(astock, "WORKSPACE", workspace)
+
+    astock._append_memory("first-run")
+
+    index = tmp_path / "memory" / "MEMORY.md"
+    assert index.is_file()
+    assert "runs/first-run.json" in index.read_text(encoding="utf-8")
+    ignored = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "memory/MEMORY.md" in ignored
+    assert "memory/runs/*.json" in ignored
